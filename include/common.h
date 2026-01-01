@@ -8,6 +8,13 @@
 #include <signal.h>
 #include <sys/types.h>
 
+extern int N;
+extern int M;
+extern int K;
+extern int T1;
+extern int T2;
+extern int R;
+
 typedef enum {
 LOADING,
 SAILING,
