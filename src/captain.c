@@ -1,6 +1,9 @@
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-    printf("Captain process started\n");
+    (void)argc;
+    (void)argv;
+
+    printf("KAPITAN: Gotowy do pracy\n");
     return 0;
 } 

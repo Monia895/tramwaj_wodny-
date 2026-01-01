@@ -1,7 +1,10 @@
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-   printf("Dispatcher process started\n");
+   (void)argc;
+   (void)argv;
+
+   printf("DYSPOZYTOR: Monitoruje rejsy\n");
    return 0;
 }
 
