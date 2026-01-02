@@ -33,12 +33,18 @@ int passengers_on_bridge;
 
 static inline void sem_lock(int sem_id) {
     struct sembuf op = {0, -1, 0};
-    semop(sem_id, &op, 1);
+    if (semop(sem_id, &op, 1) == -1) {
+        perror("semop lock");
+        exit(1);
+    }
 }
 
 static inline void sem_unlock(int sem_id) {
     struct sembuf op = {0, 1, 0};
-    semop(sem_id, &op, 1);
+    if (semop(sem_id, &op, 1) == -1) {
+        perror("semop unlock");
+        exit(1);
+    }
 }
 
 extern int shm_id;

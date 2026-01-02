@@ -1,149 +1,145 @@
 #include "common.h"
+#include "ipc.h"
+#include "log.h"
+
 #include <sys/wait.h>
 
+/*definicje zmiennych globalnych */
 int N, M, K, T1, T2, R;
 
 int shm_id;
 int sem_id;
 shared_state_t *state;
 
-int main(void) {
-
+static void read_and_valide_input(void) {
     printf("Podaj parametry symulacji:\n");
 
     printf("N (maksymalna liczba pasazerow): ");
     if (scanf("%d", &N) != 1) {
-        perror("Blad wczytywania N");
-        exit(1);
+        perror("scanf N");
+        exit(EXIT_FAILURE);
     }
 
     printf("M (maksymalna liczba rowerow): ");
     if (scanf("%d", &M) != 1) {
-        perror("Blad wczytywania M");
-        exit(1);
+        perror("scanf M");
+        exit(EXIT_FAILURE);
     }
 
     printf("K (pojemnosc mostku): ");
     if (scanf("%d", &K) != 1) {
-        perror("Blad wczytywania K");
-        exit(1);
+        perror("scanf K");
+        exit(EXIT_FAILURE);
     }
 
     printf("T1 (czas do wyplyniecia): ");
     if (scanf("%d", &T1) != 1) {
-        perror("Blad wczytywania T1");
-        exit(1);
+        perror("scanf T1");
+        exit(EXIT_FAILURE);
     }
 
     printf("T2 (czas rejsu): ");
     if (scanf("%d", &T2) != 1) {
-        perror("Blad wczytywania T2");
-        exit(1);
+        perror("scanf T2");
+        exit(EXIT_FAILURE);
     }
 
     printf("R (maksymalna liczba rejsow): ");
     if (scanf("%d", &R) != 1) {
-        perror("Blad wczytywania R");
-        exit(1);
+        perror("scanf R");
+        exit(EXIT_FAILURE);
     }
 
+    /* walidacja */
     if (N <= 0) {
        fprintf(stderr, "Blad: N musi byc > 0\n");
-       exit(1);
+       exit(EXIT_FAILURE);
     }
 
     if (M < 0 || M >= N) {
        fprintf(stderr, "Blad: M musi byc >= 0 i < N\n");
-       exit(1);
+       exit(EXIT_FAILURE);
     }
 
     if (K <= 0 || K >= N) {
        fprintf(stderr, "Blad: K musi byc > 0 i < N\n");
-       exit(1);
+       exit(EXIT_FAILURE);
     }
 
     if (T1 <= 0 || T2 <= 0) {
        fprintf(stderr, "Blad: T1 i T2 musza byc > 0\n");
-       exit(1);
+       exit(EXIT_FAILURE);
     }
 
     if (R <= 0) {
        fprintf(stderr, "Blad: R musi byc > 0\n");
-       exit(1);
+       exit(EXIT_FAILURE);
     }
-
     printf("Parametry poprawne. Start symulacji.\n\n");
+}
 
-    key_t key = ftok(".", 'S');
-    if (key == -1) {
-       perror("ftok");
-       exit(1);
-    }
+int main(void) {
+    pid_t pid;
 
-    /* Pamiec dzielona */
-    shm_id = shmget(key, sizeof(shared_state_t), IPC_CREAT | 0600);
-    if (shm_id == -1) {
-        perror("shmegt");
-        exit(1);
-    }
+    /* wejscie i walidacja */
+    read_and_valide_input();
 
-    state = shmat(shm_id, NULL, 0);
-    if (state == (void *)-1) {
-        perror("shmat");
-        exit(1);
-    }
+    /* inicjalizacja ipc */
+    ipc_init();
 
-    /* Inicjalizacja */
+    /* inicjalizacja stanu wspolnego */
     state->passengers_on_ship = 0;
     state->bikes_on_ship = 0;
     state->passengers_on_bridge = 0;
 
-    /* Semafor (mutex) */
-    sem_id = semget(key, 1, IPC_CREAT | 0600);
-    if (sem_id == -1) {
-        perror("segment");
-        exit(1);
-    }
-
-    if (semctl(sem_id, 0, SETVAL, 1) == -1) {
-       perror("semctl");
-       exit(1);
-    }
-
-    pid_t pid;
-
+    log_event("MAIN: Start symulacji tramwaju wodnego");
     printf("MAIN: Start symulacji tramwaju wodnego\n");
 
+    /* uruchomienie kapitana */
     pid = fork();
+    if (pid == -1) {
+        perror("fork captain");
+        exit(EXIT_FAILURE);
+    }
     if (pid == 0) {
         execl("./build/captain", "captain", NULL);
         perror("execl captain");
-        exit(1);
+        exit(EXIT_FAILURE);
    }
 
+   /* uruchomienie dyspozytora */
    pid = fork();
+   if (pid == -1) {
+       perror("fork dispatcher");
+       exit(EXIT_FAILURE);
+   }
    if (pid == 0) {
-      execl("./build/dispatcher", "dispatcher", NULL);
-      perror("execl dispatcher");
-      exit(1);
+       execl("./build/dispatcher", "dispatcher", NULL);
+       perror("execl dispatcher");
+       exit(EXIT_FAILURE);
    }
 
    for (int i = 0; i < 3; i++) {
        pid = fork();
+       if (pid == -1) {
+           perror("fork passenger");
+           exit(EXIT_FAILURE);
+       }
        if (pid == 0) {
           execl("./build/passenger", "passenger", NULL);
           perror("execl passenger");
-          exit(1);
+          exit(EXIT_FAILURE);
        }
     }
 
-  while (wait(NULL) > 0);
+    /* czekanie na zakonczenie procesow potomnych */
+    while (wait(NULL) > 0);
 
-  printf("MAIN: Koniec symulacji\n");
+    log_event("MAIN: Koniec symulacji");
+    printf("MAIN: Koniec symulacji\n");
 
-  shmdt(state);
-  shmctl(shm_id, IPC_RMID, NULL);
-  semctl(sem_id, 0, IPC_RMID);
+    /* sprzatanie ipc */
+    ipc_cleanup();
 
-  return 0;
+    return 0;
 }
