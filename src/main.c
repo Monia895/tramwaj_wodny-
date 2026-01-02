@@ -3,6 +3,10 @@
 
 int N, M, K, T1, T2, R;
 
+int shm_id;
+int sem_id;
+shared_state_t *state;
+
 int main(void) {
 
     printf("Podaj parametry symulacji:\n");
@@ -70,12 +74,48 @@ int main(void) {
 
     printf("Parametry poprawne. Start symulacji.\n\n");
 
+    key_t key = ftok(".", 'S');
+    if (key == -1) {
+       perror("ftok");
+       exit(1);
+    }
+
+    /* Pamiec dzielona */
+    shm_id = shmget(key, sizeof(shared_state_t), IPC_CREAT | 0600);
+    if (shm_id == -1) {
+        perror("shmegt");
+        exit(1);
+    }
+
+    state = shmat(shm_id, NULL, 0);
+    if (state == (void *)-1) {
+        perror("shmat");
+        exit(1);
+    }
+
+    /* Inicjalizacja */
+    state->passengers_on_ship = 0;
+    state->bike_on_ship = 0;
+    state->passengers_on_bridge = 0;
+
+    /* Semafor (mutex) */
+    sem_id = semget(key, 1, IPC_CREAT | 0600);
+    if (sem_id == -1) {
+        perror("segment");
+        exit(1);
+    }
+
+    if (semctl(sem_id, 0, SETVAL, 1) == -1) {
+       perror("semctl");
+       exit(1);
+    }
+
     pid_t pid;
 
     printf("MAIN: Start symulacji tramwaju wodnego\n");
 
     pid = fork();
-    if (pid == 0) { 
+    if (pid == 0) {
         execl("./build/captain", "captain", NULL);
         perror("execl captain");
         exit(1);
@@ -87,17 +127,18 @@ int main(void) {
       perror("execl dispatcher");
       exit(1);
    }
-for (int i = 0; i < 3; i++) {
-  pid = fork();
-  if (pid == 0) {
-     execl("./build/passenger", "passenger", NULL);
-     perror("execl passenger");
-     exit(1);
-  }
-}
+
+   for (int i = 0; i < 3; i++) {
+       pid = fork();
+       if (pid == 0) {
+          execl("./build/passenger", "passenger", NULL);
+          perror("execl passenger");
+          exit(1);
+       }
+    }
 
   while (wait(NULL) > 0);
-  
+
   printf("MAIN: Koniec symulacji\n");
   return 0;
 }
