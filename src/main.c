@@ -95,7 +95,7 @@ int main(void) {
 
     /* Inicjalizacja */
     state->passengers_on_ship = 0;
-    state->bike_on_ship = 0;
+    state->bikes_on_ship = 0;
     state->passengers_on_bridge = 0;
 
     /* Semafor (mutex) */
@@ -140,5 +140,10 @@ int main(void) {
   while (wait(NULL) > 0);
 
   printf("MAIN: Koniec symulacji\n");
+
+  shmdt(state);
+  shmctl(shm_id, IPC_RMID, NULL);
+  semctl(sem_id, 0, IPC_RMID);
+
   return 0;
 }
