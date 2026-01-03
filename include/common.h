@@ -20,9 +20,10 @@ extern int R;
 
 typedef enum {
 LOADING,
+DEPARTING,
 SAILING,
 UNLOADING,
-STOPPED
+FINISHED
 } ship_state_t;
 
 typedef struct {
