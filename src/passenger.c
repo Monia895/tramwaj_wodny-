@@ -1,7 +1,10 @@
+#define _POSIX_C_SOURCE 200809L
 #include "common.h"
 #include "log.h"
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
 
 int main(void) {
     srand(getpid() ^ time(NULL));
@@ -29,6 +32,14 @@ int main(void) {
         perror("shmat");
         exit(1);
     }
+
+    sem_lock(sem_id, SEM_STATE);
+    port_t port = state->current_port;
+    sem_unlock(sem_id, SEM_STATE);
+
+    log_event("PASAZER [%d]: Czeka w porcie %s",
+        getpid(),
+        port == KRAKOW ? "KRAKOW" : "TYNIEC");
 
     /* losowanie roweru */
     int has_bike = (rand() % 10 < 3);
@@ -74,6 +85,14 @@ int main(void) {
 
         sem_unlock(sem_id, SEM_SHIP);
 
+        sem_lock(sem_id, SEM_STATE);
+        if (state->bridge_dir != TO_SHIP) {
+            sem_unlock(sem_id, SEM_STATE);
+            usleep(200000);
+            continue;
+        }
+        sem_unlock(sem_id, SEM_STATE);
+
         struct sembuf bridge_down = {
             .sem_num = SEM_BRIDGE,
             .sem_op = -bridge_weight,
@@ -84,9 +103,56 @@ int main(void) {
 
         sem_lock(sem_id, SEM_STATE);
         state->passengers_on_bridge += bridge_weight;
-        sem_unlock(sem_id, SEM_STATE);
+        sem_unlock(sem_id,SEM_STATE);
 
         log_event("PASAZER [%d]: Na mostku (waga %d)", pid, bridge_weight);
+
+        sem_lock(sem_id, SEM_STATE);
+        if (state->boarding_closed) {
+
+            state->passengers_on_bridge -= bridge_weight;
+            sem_unlock(sem_id, SEM_STATE);
+
+            struct sembuf bridge_up = {
+                .sem_num = SEM_BRIDGE,
+                .sem_op = bridge_weight,
+                .sem_flg = 0
+            };
+            semop(sem_id, &bridge_up, 1);
+
+            log_event("PASAZER [%d]: Schodzi z mostka (zamkniete wejscie)", pid);
+            shmdt(state);
+            return 0;
+        }
+        sem_unlock(sem_id, SEM_STATE);
+
+        sem_lock(sem_id, SEM_STATE);
+        if (state->ship_state == FINISHED) {
+
+            state->passengers_on_bridge -= bridge_weight;
+            sem_unlock(sem_id, SEM_STATE);
+
+        sem_lock(sem_id, SEM_STATE);
+        if (state->bridge_dir != FROM_SHIP) {
+            sem_unlock(sem_id, SEM_STATE);
+            usleep(200000);
+            continue;
+        }
+        sem_unlock(sem_id, SEM_STATE);
+
+            struct sembuf bridge_up = {
+                .sem_num = SEM_BRIDGE,
+                .sem_op = bridge_weight,
+                .sem_flg = 0
+            };
+            semop(sem_id, &bridge_up, 1);
+
+            log_event("PASAZER [%d]: Schodzi z mostka (koniec pracy statku)", pid);
+            shmdt(state);
+            return 0;
+        }
+        sem_unlock(sem_id, SEM_STATE);
+
 
         sem_lock(sem_id, SEM_STATE);
         sem_lock(sem_id, SEM_SHIP);
@@ -117,6 +183,15 @@ int main(void) {
                 state->passengers_on_ship, N,
                 state->bikes_on_ship, M
             );
+
+            int fd = open(TRAM_FIFO, O_WRONLY | O_NONBLOCK);
+            if (fd != -1) {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         "FIFO: PASAZER %d wszedl na statek\n", pid);
+                write(fd, msg, strlen(msg));
+                close(fd);
+            }
 
             boarded = 1;
         } else {
