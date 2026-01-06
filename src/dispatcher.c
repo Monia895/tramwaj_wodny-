@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "common.h"
 #include "log.h"
 #include <time.h>
@@ -11,6 +12,8 @@ int main(void) {
    shm_id = shmget(key, sizeof(shared_state_t), 0);
    sem_id = semget(key, SEM_COUNT, 0);
    state = shmat(shm_id, NULL, 0);
+
+   extern int msg_id;
 
    log_event("DYSPOZYTOR: Uruchomiony");
 
@@ -33,11 +36,21 @@ int main(void) {
            kill(captain_pid, SIGUSR1);
        }
 
+       struct msg m;
+       m.type = 1;
+       strcpy(m.text, "EARLY_DEPARTURE");
+       msgsnd(msg_id, &m, sizeof(m.text), 0);
+
        if (rand() % 10 == 0) {
            log_event("DYSPOZYTOR: Wysylam SIGUSR2");
            kill(captain_pid, SIGUSR2);
            break;
        }
+       struct msg m;
+       m.type = 1;
+       strcpy(m.text, "STOP");
+       msgsnd(msg_id, &m, sizeof(m.text), 0);
+
    }
 
    log_event("DYSPOZYTOR: Koncze prace");
