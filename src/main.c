@@ -1,12 +1,13 @@
+#include <pthread.h>
 #include "common.h"
 #include "ipc.h"
 #include "log.h"
 
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /*definicje zmiennych globalnych */
-int N, M, K, T1, T2, R;
-
 int shm_id;
 int sem_id;
 shared_state_t *state;
@@ -84,8 +85,31 @@ int main(void) {
     /* wejscie i walidacja */
     read_and_valide_input();
 
+    if (mkfifo(TRAM_FIFO, 0600) == -1) {
+        if (errno != EEXIST) {
+            perror("mkfifo");
+            exit(EXIT_FAILURE);
+        }
+    }
+
     /* inicjalizacja ipc */
-    ipc_init();
+    ipc_init(K);
+
+    pthread_t logger;
+    pthread_create(&logger, NULL, logger_thread, NULL);
+
+    sem_lock(sem_id, SEM_STATE);
+    state->boarding_closed = 0;
+    sem_unlock(sem_id, SEM_STATE);
+
+    sem_lock(sem_id, SEM_STATE);
+    state->current_port = KRAKOW;
+    sem_unlock(sem_id, SEM_STATE);
+
+    sem_lock(sem_id, SEM_STATE);
+    state->bridge_dir = TO_SHIP;
+    sem_unlock(sem_id, SEM_STATE);
+
 
     /* inicjalizacja stanu wspolnego */
     state->passengers_on_ship = 0;
@@ -140,6 +164,12 @@ int main(void) {
 
     /* sprzatanie ipc */
     ipc_cleanup();
+
+    unlink(TRAM_FIFO);
+
+    logger_running = 0;
+    pthread_cond_signal(&log_cond);
+    pthread_join(logger, NULL);
 
     return 0;
 }

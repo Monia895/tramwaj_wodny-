@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -Iinclude
+CFLAGS += -pthread
 BUILD = build
 
 TARGETS = main captain dispatcher passenger
