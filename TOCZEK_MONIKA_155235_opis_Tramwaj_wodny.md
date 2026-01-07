@@ -51,6 +51,7 @@ Wszystkie parametry wejsciowe sa walidowane przed uruchomieniem symulacji. W prz
 
 ### Test 1 - Podstawowy przeplyw
 Cel: Sprawdzenie poprawnego kursowania tramwaju
+Parametry: N=10 M=3 K=5 T1=5 T2=3 R=2
 - Wejscie pasazerow bez rowerow
 - Przestrzeganie limitu N
 - Prawidlowe odplyniecie po czasie T1
@@ -58,35 +59,41 @@ Cel: Sprawdzenie poprawnego kursowania tramwaju
 
 ### Test 2 - Ograniczenia mostku
 Cel: Test pojemnosci mostka
+Parametry: N=20 M=10 K=2 T1=10 T2=5 R=1
 - Proba wejscia wiekszej liczby pasazerow niz K
 - Weryfikacja blokowania wejscia przy pelnym moscie
 - Sprawdzenie oczyszczania mostku przed odplynieciem
 
 ### Test 3 - Ograniczenia statku
 Cel: Test pojemnosci statku
+Parametry: N=5 M=2 K=5 T1=15 T2=5 R=1
 - Proba wejscia wiekszej liczby pasazerow niz N
 - Proba przewiezienia liczby rowerow > M
 
 ### Test 4 - Przedwczesne odplyniecie
 Cel:  Test reakcji na sygnal1
+Parametry: N=20 M=10 K=10 T1=60 T2=5 R=1
 - Wyslanie sygnalu1 podczas zaladunku
 - Natychmiastowe przygotowanie do odplyniecia
 - Prawidlowe obsluzenie pasazerow na moscie
 
 ### Test 5 - Przerwanie rejsow
 Cel: Test zakonczenia pracy
+Parametry: N=10 M=3 K=5 T1=10 T2=5 R=5
 - Wyslanie sygnalu2 podczas roznych faz cyklu
 - Sprawdzenie bezpiecznego zakonczenia przy pelnym statku
 - Weryfikacja nierozpoczynania nwych rejsow
 
 ### Test 6 - Pasazerowie z rowerami
 Cel: Weryfikacja obslugi rowerow
+Parametry: N=10 M=1 K=3 T1=10 T2=5 R=1 
 - Mieszani pasazerowie z/bez rowerow
 - Przestrzeganie limitu M dla rowerow
 - Prawidlowe zajmowanie miejsc na mostku (2 miejsca dla roweru)
 
 ### Test 7 - Graniczne warunki
 Cel: Test w warunkach skrajnych
+Parametry: N=50 M=50 K=50 T1=1 T2=1 R=10
 - Pelna pojemnosc statku (N pasazerow)
 - Maksymalna liczba rowerow (M)
 - Jednoczesne wejscie wielu pasazerow
