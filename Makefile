@@ -1,27 +1,29 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -Iinclude
-CFLAGS += -pthread
-BUILD = build
+CFLAGS = -Wall -Wextra -pthread -Iinclude
+BUILD_DIR = build
+SRC_DIR = src
 
 TARGETS = main captain dispatcher passenger
 
-all: $(TARGETS)
+all: $(BUILD_DIR) $(addprefix $(BUILD_DIR)/, $(TARGETS))
 
-$(BUILD):
-	mkdir -p $(BUILD)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-main: $(BUILD) src/main.c src/log.c src/ipc.c src/ipc_globals.c
-	$(CC) $(CFLAGS) src/main.c src/log.c src/ipc.c src/ipc_globals.c -o $(BUILD)/main
+# Reguly kompilacji
+$(BUILD_DIR)/main: $(SRC_DIR)/main.c $(SRC_DIR)/ipc.c $(SRC_DIR)/log.c
+	$(CC) $(CFLAGS) $^ -o $@
 
-captain: $(BUILD) src/captain.c src/log.c src/ipc.c src/ipc_globals.c
-	$(CC) $(CFLAGS) src/captain.c src/log.c src/ipc.c src/ipc_globals.c -o $(BUILD)/captain
+$(BUILD_DIR)/captain: $(SRC_DIR)/captain.c $(SRC_DIR)/ipc.c $(SRC_DIR)/log.c
+	$(CC) $(CFLAGS) $^ -o $@
 
-dispatcher: $(BUILD) src/dispatcher.c src/log.c src/ipc.c src/ipc_globals.c
-	$(CC) $(CFLAGS) src/dispatcher.c src/log.c src/ipc.c src/ipc_globals.c -o $(BUILD)/dispatcher
+$(BUILD_DIR)/dispatcher: $(SRC_DIR)/dispatcher.c $(SRC_DIR)/ipc.c $(SRC_DIR)/log.c
+	$(CC) $(CFLAGS) $^ -o $@
 
-passenger: $(BUILD) src/passenger.c src/log.c src/ipc.c src/ipc_globals.c
-	$(CC) $(CFLAGS) src/passenger.c src/log.c src/ipc.c src/ipc_globals.c -o $(BUILD)/passenger
+$(BUILD_DIR)/passenger: $(SRC_DIR)/passenger.c $(SRC_DIR)/ipc.c $(SRC_DIR)/log.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD_DIR) simulation.log /tmp/tram_log_fifo
 
+.PHONY: all clean

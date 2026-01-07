@@ -1,1 +1,11 @@
+# Pliki kompilacji i binaria
 build/
+*.o
+main
+captain
+passenger
+dispatcher
+
+# Logi i pliki tymczasowe
+*.log
+/tmp/tram_log_fifo

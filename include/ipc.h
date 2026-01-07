@@ -3,7 +3,15 @@
 
 #include "common.h"
 
-void ipc_init(int bridge_capacity);
+void ipc_init_all(int N, int M, int K, int T1, int T2, int R);
+void ipc_attach(void);
 void ipc_cleanup(void);
+void ipc_detach(void);
+
+// Pomocnicze funkcje semaforow
+void sem_lock(int sem_num);
+void sem_unlock(int sem_num);
+void sem_wait_bridge(int weight);
+void sem_signal_bridge(int weight);
 
 #endif

@@ -2,8 +2,8 @@
 
 ## 1. Temat projektu
 Symulacja dzilania tramwaju wodnego kursujacego w sezonie letnim na trasie Krakow Wawel - Tyniec.
-Projekt obejmuje modelowanie zachowania pasazerow, kapitana statku oraz dyspozytora, z uwzglednieniem ograniczen pojemn>
-
+Projekt obejmuje modelowanie zachowania pasazerow, kapitana statku oraz dyspozytora, z uwzglednieniem ograniczen pojemnosci.
+Projekt realizuje symulacje wspolbiezna oparta o wiele procesow komunikujacych sie za pomoca mechanizmow IPC systemu Linux.
 
 ## 2. Parametry systemu i oznaczenia
 - N - maksymalna liczba pasazerow na statku (N > 0)
@@ -14,15 +14,16 @@ Projekt obejmuje modelowanie zachowania pasazerow, kapitana statku oraz dyspozyt
 - R - maksymalna liczba rejsow w ciagu dnia
 - sygnal1 - polecenie od dyspozytora do wczesniejszego wyplyniecia
 - sygnal2 - polecenie zakonczenia dalszych rejsow
+Wszystkie parametry wejsciowe sa walidowane przed uruchomieniem symulacji. W przypadku blednych wartosci program zglasza blad i konczy dzialanie.
 
 ## 3.Opis zadan
 
 ### Dyspozytor
-- Monitorowanie liczby wykonanych rejsow
+- Wysylanie sygnalow sterujacych w trakcie trwania symulacji
 - Wysylanie sygnalow sterujacych:
   - sygnal1 - wczesniejsze wyplyniecie
   - sygnal2 - przerwanie pracy statku
-- Kontrolowaniw zakonczenia symulacji
+- Kontrolowanie zakonczenia symulacji
 
 ### Kapitan statku
 - Kontrola warunkow przed odplynieciem:
@@ -43,7 +44,7 @@ Projekt obejmuje modelowanie zachowania pasazerow, kapitana statku oraz dyspozyt
   - z rowerem, zajmuje 2 miejsca
 - Na poklad moze wejsc maksymalnie N pasazerow oraz M < N rowerow
 - Jesli statek ma odplynac i nie zmiescil sie na pokladzie opuszcza mostek,
-- Po wjesciu na statek oczekuje doplyniecia do celu,
+- Po wejsciu na statek oczekuje doplyniecia do celu,
 - Po doplynieciu do Tynca opuszcza statek, ruch na mostku odbywa sie tylko w jedna strone
 
 ## 4. Testy symulacji

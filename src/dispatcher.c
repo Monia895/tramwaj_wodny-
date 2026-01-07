@@ -1,60 +1,46 @@
 #define _POSIX_C_SOURCE 200809L
-#include "common.h"
+#include "ipc.h"
 #include "log.h"
+#include "msg.h"
 #include <time.h>
-#include <signal.h>
+#include <sys/msg.h>
 #include <unistd.h>
 
 int main(void) {
-   srand(getpid() ^ time(NULL));
+    srand(time(NULL));
+    ipc_attach();
 
-   key_t key = ftok(".", 'S');
-   shm_id = shmget(key, sizeof(shared_state_t), 0);
-   sem_id = semget(key, SEM_COUNT, 0);
-   state = shmat(shm_id, NULL, 0);
+    log_msg("DYSPOZYTOR: Start pracy.");
 
-   extern int msg_id;
+    while (1) {
+        sleep(rand() % 10 + 5);
 
-   log_event("DYSPOZYTOR: Uruchomiony");
+        sem_lock(SEM_MUTEX);
+        pid_t cap_pid = state->captain_pid;
+        ship_state_t st = state->ship_state;
+        sem_unlock(SEM_MUTEX);
 
-   while (1) {
-       sleep(rand() % 8 + 3);
+        if (st == FINISHED) break;
 
-       sem_lock(sem_id, SEM_STATE);
+        int action = rand() % 10;
 
-       if (state->ship_state == FINISHED) {
-           sem_unlock(sem_id, SEM_STATE);
-           break;
-       }
+        if (action < 3 && st == LOADING) {
+            // sygnal 1: Odplywaj wczesniej (SIGUSR1)
+            log_msg("DYSPOZYTOR: Nakaz wczesniejszego wyplyniecia (SIGUSR1)");
+            kill(cap_pid, SIGUSR1);
+        }
+        else if (action == 9) {
+            // sygnal 2: Koniec pracy (SIGUSR2)
+            struct msg_buf msg;
+            msg.mtype = 1;
+            msg.cmd = 2;
+            if (msgsnd(msg_id, &msg, sizeof(int), 0) != -1)
+                 log_msg("DYSPOZYTOR: Wyslano polecenie STOP przez kolejke MSG");
+            kill(cap_pid, SIGUSR2);
+            break;
+        }
+    }
 
-       pid_t captain_pid = state->captain_pid;
-       ship_state_t st = state->ship_state;
-       sem_unlock(sem_id, SEM_STATE);
-
-       if (st == LOADING && (rand() % 2)) {
-           log_event("DYSPOZYTOR: Wysylam SIGUSR1");
-           kill(captain_pid, SIGUSR1);
-       }
-
-       struct msg m;
-       m.type = 1;
-       strcpy(m.text, "EARLY_DEPARTURE");
-       msgsnd(msg_id, &m, sizeof(m.text), 0);
-
-       if (rand() % 10 == 0) {
-           log_event("DYSPOZYTOR: Wysylam SIGUSR2");
-           kill(captain_pid, SIGUSR2);
-           break;
-       }
-       struct msg m;
-       m.type = 1;
-       strcpy(m.text, "STOP");
-       msgsnd(msg_id, &m, sizeof(m.text), 0);
-
-   }
-
-   log_event("DYSPOZYTOR: Koncze prace");
-   shmdt(state);
-   return 0;
+    ipc_detach();
+    return 0;
 }
-
