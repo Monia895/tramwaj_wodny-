@@ -6,6 +6,8 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
+#define MAX_PROCESS_LIMIT 1000
+
 // handler sprzatajacy
 void cleanup_handler(int sig) {
     (void)sig;
@@ -53,6 +55,15 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    // walidacja ilosci procesow
+    long total_processes = (long)N * (long)R * 3;
+    if (total_processes > MAX_PROCESS_LIMIT) {
+        fprintf(stderr, "\nBLAD KRYTYCZNY: Zbyt duza liczba procesow do utworzenia!\n");
+        fprintf(stderr, "Planowano utworzyc ok. %ld procesow pasazerow (Limit: %d).\n", total_processes, MAX_PROCESS_LIMIT);
+        fprintf(stderr, "Zmniejsz N (pojemnosc) .\n");
+        return 1;
+    }
+
     // inicjalizacja loggera (tworzy FIFO)
     log_init_parent();
 
@@ -63,6 +74,10 @@ int main(int argc, char *argv[]) {
 
     // uruchomienie kapitana
     pid_t pid_cap = fork();
+    if (pid_cap == -1) {
+        perror("fork captain");
+        exit(1);
+    }
     if (pid_cap == 0) {
         execl("./build/captain", "captain", NULL);
         perror("execl captain");
@@ -71,6 +86,10 @@ int main(int argc, char *argv[]) {
 
     // uruchomienie dyspozytora
     pid_t pid_disp = fork();
+    if (pid_disp == -1) {
+        perror("fork dispatcher");
+        exit(1);
+    }
     if (pid_disp == 0) {
         execl("./build/dispatcher", "dispatcher", NULL);
         perror("execl dispatcher");
@@ -89,6 +108,10 @@ int main(int argc, char *argv[]) {
 
         if (passengers_created < R * N * 3) {
             pid_t pid_pass = fork();
+            if (pid_pass == -1) {
+                perror("fork passenger");
+                exit(1);
+            }
             if (pid_pass == 0) {
                 execl("./build/passenger", "passenger", NULL);
                 perror("execl passenger");
