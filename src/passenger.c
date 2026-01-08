@@ -9,6 +9,7 @@ int main(void) {
     srand(getpid() ^ time(NULL));
     ipc_attach();
 
+    // losowanie atrybutow pasazera
     pid_t my_pid = getpid();
     int has_bike = (rand() % 100 < 30);
     int weight = has_bike ? 2 : 1;
@@ -62,6 +63,7 @@ int main(void) {
 
     sem_lock(SEM_MUTEX);
     if (!state->boarding_closed && state->ship_state == LOADING) {
+        // sprawdzenie limitow
         if (state->passengers_on_ship < state->N &&
            (!has_bike || state->bikes_on_ship < state->M)) {
 
@@ -69,6 +71,7 @@ int main(void) {
             if (has_bike) state->bikes_on_ship++;
             boarded = 1;
 
+            // usuniecie ze stosu i przesuniecie reszty
             for(int i=0; i<state->stack_top; i++) {
                 if(state->bridge_stack[i] == my_pid) {
                     for(int j=i; j<state->stack_top-1; j++) {
@@ -88,6 +91,7 @@ int main(void) {
     }
     sem_unlock(SEM_MUTEX);
 
+    // jesli nie udalo sie wejss -> wycofanie
     if (!boarded) {
         while (1) {
             sem_lock(SEM_MUTEX);
@@ -108,7 +112,7 @@ int main(void) {
 
     sem_signal_bridge(weight);
 
-    // czekanie na koniec rejsu
+    // rejs statkiem
     while (1) {
         sem_lock(SEM_MUTEX);
         if (state->ship_state == UNLOADING) {

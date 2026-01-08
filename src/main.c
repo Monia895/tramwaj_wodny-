@@ -6,12 +6,14 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-
+// handler sprzatajacy
 void cleanup_handler(int sig) {
     (void)sig;
-    printf("\nPrzechwycono sygnal. Sprzatanie...\n");
+    printf("\nPrzechwycono sygnal. Sprzatanie i zamykanie procesow...\n");
     ipc_cleanup();
     log_close_parent();
+    signal(SIGKILL, SIG_DFL);
+    kill(0, SIGKILL);
     exit(0);
 }
 
@@ -22,8 +24,11 @@ int main(int argc, char *argv[]) {
 
     int N, M, K, T1, T2, R;
 
+    // rejestracja sygnalow
     signal(SIGINT, cleanup_handler);
+    signal(SIGTSTP, cleanup_handler);
 
+    // pobieranie i walidacja parametrow
     printf("Podaj parametry (N M K T1 T2 R): ");
     if (scanf("%d %d %d %d %d %d", &N, &M, &K, &T1, &T2, &R) != 6) {
         fprintf(stderr, "Blad: Niepoprawne dane wejsciowe.\n");
@@ -96,6 +101,7 @@ int main(int argc, char *argv[]) {
         waitpid(-1, NULL, WNOHANG);
     }
 
+    // oczekiwanie na koniec symulacji
     waitpid(pid_cap, NULL, 0);
     kill(pid_disp, SIGKILL);
 

@@ -6,6 +6,7 @@
 #include <sys/msg.h>
 #include <unistd.h>
 
+// zmienne sygnalowe
 volatile sig_atomic_t signal_early = 0;
 volatile sig_atomic_t signal_stop = 0;
 
@@ -17,6 +18,7 @@ void handle_sig(int sig) {
 int main(void) {
     ipc_attach();
 
+    // konfiguracja obslugi sygnalow
     struct sigaction sa;
     sa.sa_handler = handle_sig;
     sigemptyset(&sa.sa_mask);
@@ -30,6 +32,7 @@ int main(void) {
 
     log_msg("KAPITAN: Rozpoczynam prace. PID=%d", getpid());
 
+    // glowna petla pracy kapitana
     while (1) {
         // sprawdzenie konca pracy
         sem_lock(SEM_MUTEX);

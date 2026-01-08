@@ -33,6 +33,7 @@ KRAKOW,
 TYNIEC
 } port_t;
 
+// struktura pamieci dzielonej
 typedef struct {
     int N, M, K, T1, T2, R; // parametry symulacji
 
@@ -46,7 +47,7 @@ typedef struct {
 
     pid_t captain_pid;
 
-    pid_t bridge_stack[MAX_K];
+    pid_t bridge_stack[MAX_K]; // stos dla mechanizmu LIFO
     int stack_top;
 } shared_state_t;
 

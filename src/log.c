@@ -13,6 +13,7 @@ static int fifo_fd_read = -1;
 static pthread_t log_thread;
 static volatile int log_running = 1;
 
+// watek zapisujacy logi z FIFO do pliku/konsoli
 void *logger_thread_func(void *arg) {
     (void)arg;
     char buf[512];
@@ -35,6 +36,7 @@ void *logger_thread_func(void *arg) {
     return NULL;
 }
 
+// inicjalizacja logowania w procesie
 void log_init_parent(void) {
     mkfifo(FIFO_NAME, 0600);
     fifo_fd_read = open(FIFO_NAME, O_RDONLY | O_NONBLOCK);
@@ -43,6 +45,7 @@ void log_init_parent(void) {
     pthread_create(&log_thread, NULL, logger_thread_func, NULL);
 }
 
+// zamkniecie logowania i watku
 void log_close_parent(void) {
     log_running = 0;
     pthread_join(log_thread, NULL);
@@ -50,6 +53,7 @@ void log_close_parent(void) {
     unlink(FIFO_NAME);
 }
 
+// funkcja wysylajaca log do FIFO
 void log_msg(const char *fmt, ...) {
     char buf[512];
     va_list args;

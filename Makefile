@@ -1,4 +1,4 @@
-CC = gcc
+xCC = gcc
 CFLAGS = -Wall -Wextra -pthread -Iinclude
 BUILD_DIR = build
 SRC_DIR = src

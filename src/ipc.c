@@ -9,10 +9,12 @@ int sem_id = -1;
 int msg_id = -1;
 shared_state_t *state = NULL;
 
+// tworzenie wszystkich zasobow IPC
 void ipc_init_all(int N, int M, int K, int T1, int T2, int R) {
     key_t key = ftok("Makefile", 'A');
     if (key == -1) { perror("ftok"); exit(1); }
 
+    // tworzenie pamieci dzielonej
     shm_id = shmget(key, sizeof(shared_state_t), IPC_CREAT | 0600);
     if (shm_id == -1) { perror("shmget"); exit(1); }
 
@@ -30,7 +32,7 @@ void ipc_init_all(int N, int M, int K, int T1, int T2, int R) {
     state->boarding_closed = 0;
     state->stack_top = 0;
 
-    // semafory
+    // tworzenie semaforow
     sem_id = semget(key, SEM_COUNT, IPC_CREAT | 0600);
     if (sem_id == -1) { perror("semget"); exit(1); }
 
@@ -38,11 +40,12 @@ void ipc_init_all(int N, int M, int K, int T1, int T2, int R) {
     semctl(sem_id, SEM_BRIDGE, SETVAL, K);
     semctl(sem_id, SEM_MUTEX, SETVAL, 1);
 
-    // kolejka komunikatow
+    // tworzenie kolejki komunikatow
     msg_id = msgget(key, IPC_CREAT | 0600);
     if (msg_id == -1) { perror("msgget"); exit(1); }
 }
 
+// podlaczanie procesu do istniejacych zasobow
 void ipc_attach(void) {
     key_t key = ftok("Makefile", 'A');
 
@@ -54,10 +57,12 @@ void ipc_attach(void) {
     msg_id = msgget(key, 0);
 }
 
+// odlaczanie pamieci
 void ipc_detach(void) {
     shmdt(state);
 }
 
+// calkowite usuwanie zasobow z systemu
 void ipc_cleanup(void) {
     if (state) shmdt(state);
     if (shm_id != -1) shmctl(shm_id, IPC_RMID, NULL);
@@ -79,6 +84,7 @@ void sem_unlock(int sem_num) {
     if (semop(sem_id, &op, 1) == -1) perror("sem_unlock");
 }
 
+// zajmowanie miejsca na mostku
 void sem_wait_bridge(int weight) {
     struct sembuf op = {SEM_BRIDGE, -weight, 0};
     if (semop(sem_id, &op, 1) == -1) {
@@ -86,6 +92,7 @@ void sem_wait_bridge(int weight) {
     }
 }
 
+// zwalnianie miejsca na mostku
 void sem_signal_bridge(int weight) {
     struct sembuf op = {SEM_BRIDGE, weight, 0};
     if (semop(sem_id, &op, 1) == -1) perror("sem_signal_bridge");

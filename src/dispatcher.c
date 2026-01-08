@@ -13,6 +13,7 @@ int main(void) {
     log_msg("DYSPOZYTOR: Start pracy.");
 
     while (1) {
+        // losowe oczekiwanie
         sleep(rand() % 10 + 5);
 
         sem_lock(SEM_MUTEX);
