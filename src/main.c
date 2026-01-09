@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-#define MAX_PROCESS_LIMIT 1000
+#define MAX_PROCESS_LIMIT 10000
 
 // handler sprzatajacy
 void cleanup_handler(int sig) {
