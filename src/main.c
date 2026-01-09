@@ -134,5 +134,8 @@ int main(int argc, char *argv[]) {
     ipc_cleanup();
     log_close_parent();
 
+    signal(SIGTERM, SIG_IGN);
+    kill(0, SIGTERM);
+
     return 0;
 }

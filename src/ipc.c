@@ -75,25 +75,37 @@ void ipc_cleanup(void) {
 void sem_lock(int sem_num) {
     struct sembuf op = {sem_num, -1, 0};
     if (semop(sem_id, &op, 1) == -1) {
-        if (errno != EINTR) perror("sem_lock");
+        if (errno != EINTR) {
+            // perror("sem_lock");
+            exit(1);
+        }
     }
 }
 
 void sem_unlock(int sem_num) {
     struct sembuf op = {sem_num, 1, 0};
-    if (semop(sem_id, &op, 1) == -1) perror("sem_unlock");
+    if (semop(sem_id, &op, 1) == -1) {
+        // perror("sem_unlock");
+        exit(1);
+    }
 }
 
 // zajmowanie miejsca na mostku
 void sem_wait_bridge(int weight) {
     struct sembuf op = {SEM_BRIDGE, -weight, 0};
     if (semop(sem_id, &op, 1) == -1) {
-        if (errno != EINTR) perror("sem_wait_bridge");
+        if (errno != EINTR) {
+            // perror("sem_wait_bridge");
+            exit(1);
+        }
     }
 }
 
 // zwalnianie miejsca na mostku
 void sem_signal_bridge(int weight) {
     struct sembuf op = {SEM_BRIDGE, weight, 0};
-    if (semop(sem_id, &op, 1) == -1) perror("sem_signal_bridge");
+    if (semop(sem_id, &op, 1) == -1) {
+        // perror("sem_signal_bridge");
+        exit(1);
+    }
 }

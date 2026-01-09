@@ -67,7 +67,9 @@ int main(void) {
             }
         }
 
-        if (signal_stop) continue;
+        if (signal_stop) {
+             log_msg("KAPITAN: Otrzymano STOP. Koncze zaladunek i wyplywam ostatni raz.");
+        }
 
         // odplywanie
         sem_lock(SEM_MUTEX);
