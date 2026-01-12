@@ -6,17 +6,27 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-#define MAX_PROCESS_LIMIT 10000
+#define MAX_TOTAL_PASSENGERS 5000
+#define  MAX_ACTIVE_PASSENGERS 150
+
+volatile sig_atomic_t keep_running = 1;
 
 // handler sprzatajacy
 void cleanup_handler(int sig) {
-    (void)sig;
-    printf("\nPrzechwycono sygnal. Sprzatanie i zamykanie procesow...\n");
+     (void)sig;
+    keep_running = 0;
+}
+
+void perform_cleanup(pid_t cap, pid_t disp) {
+    printf("\nSYSTEM: Rozpoczynam procedure awaryjnego zamykania...\n");
+
     ipc_cleanup();
     log_close_parent();
-    signal(SIGKILL, SIG_DFL);
+
+    if (cap > 0) kill(cap, SIGKILL);
+    if (disp > 0) kill(disp, SIGKILL);
+
     kill(0, SIGKILL);
-    exit(0);
 }
 
 int main(int argc, char *argv[]) {
@@ -27,8 +37,13 @@ int main(int argc, char *argv[]) {
     int N, M, K, T1, T2, R;
 
     // rejestracja sygnalow
-    signal(SIGINT, cleanup_handler);
-    signal(SIGTSTP, cleanup_handler);
+    struct sigaction sa;
+    sa.sa_handler = cleanup_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGTSTP, &sa, NULL);
 
     // pobieranie i walidacja parametrow
     printf("Podaj parametry (N M K T1 T2 R): ");
@@ -38,6 +53,9 @@ int main(int argc, char *argv[]) {
     }
 
     // Walidacja danych
+
+    if (N > 500) { fprintf(stderr, "Za duze N. Max 500.\n"); return 1; }
+
     if (N <= 0 || M < 0 || K <= 0 || T1 <= 0 || T2 <= 0 || R <= 0) {
         fprintf(stderr, "Blad: Parametry musza byc dodatnie (M >= 0).\n");
         return 1;
@@ -55,15 +73,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // walidacja ilosci procesow
-    long total_processes = (long)N * (long)R * 3;
-    if (total_processes > MAX_PROCESS_LIMIT) {
-        fprintf(stderr, "\nBLAD KRYTYCZNY: Zbyt duza liczba procesow do utworzenia!\n");
-        fprintf(stderr, "Planowano utworzyc ok. %ld procesow pasazerow (Limit: %d).\n", total_processes, MAX_PROCESS_LIMIT);
-        fprintf(stderr, "Zmniejsz N (pojemnosc) .\n");
-        return 1;
-    }
-
     // inicjalizacja loggera (tworzy FIFO)
     log_init_parent();
 
@@ -75,10 +84,10 @@ int main(int argc, char *argv[]) {
     // uruchomienie kapitana
     pid_t pid_cap = fork();
     if (pid_cap == -1) {
-        perror("fork captain");
-        exit(1);
-    }
+        perror("fork captain"); perform_cleanup(0,0); return 1; }
     if (pid_cap == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
         execl("./build/captain", "captain", NULL);
         perror("execl captain");
         exit(1);
@@ -87,18 +96,20 @@ int main(int argc, char *argv[]) {
     // uruchomienie dyspozytora
     pid_t pid_disp = fork();
     if (pid_disp == -1) {
-        perror("fork dispatcher");
-        exit(1);
-    }
+        perror("fork dispatcher"); perform_cleanup(pid_cap,0); return 1; }
     if (pid_disp == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
         execl("./build/dispatcher", "dispatcher", NULL);
         perror("execl dispatcher");
         exit(1);
     }
 
-    // generowanie pasazerow
+
     int passengers_created = 0;
-    while (1) {
+    int active_passengers = 0;
+
+    while (keep_running) {
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
             sem_unlock(SEM_MUTEX);
@@ -106,36 +117,39 @@ int main(int argc, char *argv[]) {
         }
         sem_unlock(SEM_MUTEX);
 
-        if (passengers_created < R * N * 3) {
-            pid_t pid_pass = fork();
-            if (pid_pass == -1) {
-                perror("fork passenger");
-                exit(1);
+        int status;
+        pid_t ended_pid;
+        while ((ended_pid = waitpid(-1, &status, WNOHANG)) > 0) {
+            if (ended_pid == pid_cap || ended_pid == pid_disp) {
+                keep_running = 0;
+            } else {
+                active_passengers--;
             }
-            if (pid_pass == 0) {
-                execl("./build/passenger", "passenger", NULL);
-                perror("execl passenger");
-                exit(1);
-            }
-            passengers_created++;
         }
 
-        usleep(200000);
-        waitpid(-1, NULL, WNOHANG);
+        if (passengers_created < N * R * 10 && active_passengers < MAX_ACTIVE_PASSENGERS) {
+            pid_t pid = fork();
+             if (pid == 0) {
+                 signal(SIGINT, SIG_DFL);
+                 signal(SIGTSTP, SIG_DFL);
+                 signal(SIGTERM, SIG_DFL);
+                 execl("./build/passenger", "passenger", NULL);
+                 perror("execl passenger");
+                 exit(1);
+             } else if (pid > 0) {
+                 passengers_created++;
+                 active_passengers++;
+             }
+        }
     }
 
-    // oczekiwanie na koniec symulacji
-    waitpid(pid_cap, NULL, 0);
-    kill(pid_disp, SIGKILL);
+    log_msg("SYSTEM: Petla glowna zakonczona. Czekam na procesy glowne...");
 
-    log_msg("SYSTEM: Koniec symulacji.");
+    if (pid_cap > 0) {
+        waitpid(pid_cap, NULL, WNOHANG);
+    }
 
-    // sprzatanie
-    ipc_cleanup();
-    log_close_parent();
-
-    signal(SIGTERM, SIG_IGN);
-    kill(0, SIGTERM);
+    perform_cleanup(pid_cap, pid_disp);
 
     return 0;
 }

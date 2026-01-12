@@ -39,6 +39,10 @@ void ipc_init_all(int N, int M, int K, int T1, int T2, int R) {
     // ustawienie wartosci poczatkowych
     semctl(sem_id, SEM_BRIDGE, SETVAL, K);
     semctl(sem_id, SEM_MUTEX, SETVAL, 1);
+    semctl(sem_id, SEM_ENTRY_GATE, SETVAL, 0);
+    semctl(sem_id, SEM_LIFO_NOTIFY, SETVAL, 0);
+    semctl(sem_id, SEM_BRIDGE_EMPTY, SETVAL, 0);
+    semctl(sem_id, SEM_DISEMBARK, SETVAL, 0);
 
     // tworzenie kolejki komunikatow
     msg_id = msgget(key, IPC_CREAT | 0600);
@@ -71,41 +75,21 @@ void ipc_cleanup(void) {
     unlink(FIFO_NAME);
 }
 
-// Funkcje pomocnicze dla semaforow
-void sem_lock(int sem_num) {
-    struct sembuf op = {sem_num, -1, 0};
-    if (semop(sem_id, &op, 1) == -1) {
+void sem_op(int sem_num, int op_val) {
+    struct sembuf op = {sem_num, op_val, 0};
+    while (semop(sem_id, &op, 1) == -1) {
+        if (errno == EIDRM || errno == EINVAL) {
+            exit(0);
+        }
+
         if (errno != EINTR) {
-            // perror("sem_lock");
+            perror("semop crash");
             exit(1);
         }
     }
 }
 
-void sem_unlock(int sem_num) {
-    struct sembuf op = {sem_num, 1, 0};
-    if (semop(sem_id, &op, 1) == -1) {
-        // perror("sem_unlock");
-        exit(1);
-    }
-}
-
-// zajmowanie miejsca na mostku
-void sem_wait_bridge(int weight) {
-    struct sembuf op = {SEM_BRIDGE, -weight, 0};
-    if (semop(sem_id, &op, 1) == -1) {
-        if (errno != EINTR) {
-            // perror("sem_wait_bridge");
-            exit(1);
-        }
-    }
-}
-
-// zwalnianie miejsca na mostku
-void sem_signal_bridge(int weight) {
-    struct sembuf op = {SEM_BRIDGE, weight, 0};
-    if (semop(sem_id, &op, 1) == -1) {
-        // perror("sem_signal_bridge");
-        exit(1);
-    }
-}
+void sem_lock(int sem_num) { sem_op(sem_num, -1); }
+void sem_unlock(int sem_num) { sem_op(sem_num, 1); }
+void sem_wait_bridge(int weight) { sem_op(SEM_BRIDGE, -weight); }
+void sem_signal_bridge(int weight) { sem_op(SEM_BRIDGE, weight); }

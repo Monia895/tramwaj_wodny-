@@ -14,8 +14,14 @@ int main(void) {
     int has_bike = (rand() % 100 < 30);
     int weight = has_bike ? 2 : 1;
 
-    // oczekiwanie na statek
+    // czekanie na statek
     while (1) {
+        struct sembuf wait_gate = {SEM_ENTRY_GATE, -1, 0};
+        if (semop(sem_id, &wait_gate, 1) == -1) {
+             if (errno == EINTR) continue;
+             return 0;
+        }
+
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
             sem_unlock(SEM_MUTEX);
@@ -27,7 +33,6 @@ int main(void) {
             break;
         }
         sem_unlock(SEM_MUTEX);
-        usleep(200000);
     }
 
     // wejscie na mostek
@@ -45,22 +50,13 @@ int main(void) {
     if (my_stack_idx < MAX_K) {
         state->bridge_stack[my_stack_idx] = my_pid;
         state->stack_top++;
-    } else {
-        sem_unlock(SEM_MUTEX);
-        sem_signal_bridge(weight);
-        ipc_detach();
-        return 1;
     }
 
-    log_msg("PASAZER %d: Wszedl na mostek (Rower: %s)", my_pid, has_bike ? "TAK" : "NIE");
+    log_msg("PASAZER %d: Na mostku (Rower: %d)", my_pid, has_bike);
     sem_unlock(SEM_MUTEX);
 
     // proba wejscia na poklad
     int boarded = 0;
-
-    // symulacja przejscia przez mostek
-    usleep(100000);
-
     sem_lock(SEM_MUTEX);
     if (!state->boarding_closed && state->ship_state == LOADING) {
         // sprawdzenie limitow
@@ -84,7 +80,7 @@ int main(void) {
 
             log_msg("PASAZER %d: Wszedl na statek.", my_pid);
         } else {
-            log_msg("PASAZER %d: Brak miejsca na statku!", my_pid);
+            log_msg("PASAZER %d: Brak miejsca!", my_pid);
         }
     } else {
         log_msg("PASAZER %d: Wejscie zamkniete!", my_pid);
@@ -97,14 +93,25 @@ int main(void) {
             sem_lock(SEM_MUTEX);
             if (state->stack_top > 0 && state->bridge_stack[state->stack_top - 1] == my_pid) {
                 state->stack_top--;
+                int remaining = state->stack_top;
+                log_msg("PASAZER %d: Schodzi z mostka (LIFO).", my_pid);
+
+                if (remaining == 0) {
+                    struct sembuf notify_cap = {SEM_BRIDGE_EMPTY, 1, 0};
+                    semop(sem_id, &notify_cap, 1);
+                } else {
+                    struct sembuf notify_next = {SEM_LIFO_NOTIFY, 1, 0};
+                    semop(sem_id, &notify_next, 1);
+                }
                 sem_unlock(SEM_MUTEX);
                 break;
             }
-            sem_unlock(SEM_MUTEX);
-            usleep(50000);
-       }
 
-        log_msg("PASAZER %d: Wycofuje sie z mostka (LIFO).", my_pid);
+            sem_unlock(SEM_MUTEX);
+            struct sembuf wait_lifo = {SEM_LIFO_NOTIFY, -1, 0};
+            semop(sem_id, &wait_lifo, 1);
+        }
+
         sem_signal_bridge(weight);
         ipc_detach();
         return 0;
@@ -112,18 +119,14 @@ int main(void) {
 
     sem_signal_bridge(weight);
 
-    // rejs statkiem
-    while (1) {
-        sem_lock(SEM_MUTEX);
-        if (state->ship_state == UNLOADING) {
-            sem_unlock(SEM_MUTEX);
-            break;
-        }
-        sem_unlock(SEM_MUTEX);
-        sleep(1);
-    }
+    // rejs
+    struct sembuf wait_disembark = {SEM_DISEMBARK, -1, 0};
+    semop(sem_id, &wait_disembark, 1);
 
-    log_msg("PASAZER %d: Opuszcza statek w porcie docelowym.", my_pid);
+    sem_lock(SEM_MUTEX);
+    log_msg("PASAZER %d: Wysiada.", my_pid);
+    sem_unlock(SEM_MUTEX);
+
     ipc_detach();
     return 0;
 }

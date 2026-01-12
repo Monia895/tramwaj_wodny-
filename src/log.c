@@ -29,7 +29,9 @@ void *logger_thread_func(void *arg) {
             fflush(log_file);
             fflush(stdout);
         } else if (n == 0) {
-            usleep(10000);
+            break;
+        } else {
+            if (errno != EINTR) break;
         }
     }
     fclose(log_file);
@@ -39,7 +41,7 @@ void *logger_thread_func(void *arg) {
 // inicjalizacja logowania w procesie
 void log_init_parent(void) {
     mkfifo(FIFO_NAME, 0600);
-    fifo_fd_read = open(FIFO_NAME, O_RDONLY | O_NONBLOCK);
+    fifo_fd_read = open(FIFO_NAME, O_RDWR);
     if (fifo_fd_read == -1) { perror("open fifo read"); return; }
 
     pthread_create(&log_thread, NULL, logger_thread_func, NULL);
@@ -48,6 +50,8 @@ void log_init_parent(void) {
 // zamkniecie logowania i watku
 void log_close_parent(void) {
     log_running = 0;
+    int fd = open(FIFO_NAME, O_WRONLY);
+    if(fd != -1) { write(fd, "", 0); close(fd); }
     pthread_join(log_thread, NULL);
     close(fifo_fd_read);
     unlink(FIFO_NAME);
@@ -62,7 +66,7 @@ void log_msg(const char *fmt, ...) {
     va_end(args);
     strcat(buf, "\n");
 
-    int fd = open(FIFO_NAME, O_WRONLY | O_NONBLOCK);
+    int fd = open(FIFO_NAME, O_WRONLY);
     if (fd != -1) {
         write(fd, buf, strlen(buf));
         close(fd);

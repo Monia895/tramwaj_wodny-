@@ -5,26 +5,17 @@
 #include "msg.h"
 #include <sys/msg.h>
 #include <unistd.h>
-
-// zmienne sygnalowe
-volatile sig_atomic_t signal_early = 0;
-volatile sig_atomic_t signal_stop = 0;
-
-void handle_sig(int sig) {
-    if (sig == SIGUSR1) signal_early = 1;
-    if (sig == SIGUSR2) signal_stop = 1;
-}
+#include <time.h>
 
 int main(void) {
     ipc_attach();
 
-    // konfiguracja obslugi sygnalow
-    struct sigaction sa;
-    sa.sa_handler = handle_sig;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGUSR1, &sa, NULL);
-    sigaction(SIGUSR2, &sa, NULL);
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGALRM);
+    sigaddset(&set, SIGUSR1);
+    sigaddset(&set, SIGUSR2);
+    sigprocmask(SIG_BLOCK, &set, NULL);
 
     sem_lock(SEM_MUTEX);
     state->captain_pid = getpid();
@@ -34,10 +25,11 @@ int main(void) {
 
     // glowna petla pracy kapitana
     while (1) {
-        // sprawdzenie konca pracy
         sem_lock(SEM_MUTEX);
-        if (state->trip_count >= state->R || signal_stop) {
+        if (state->trip_count >= state->R) {
             state->ship_state = FINISHED;
+            struct sembuf op = {SEM_ENTRY_GATE, 1000, 0};
+            semop(sem_id, &op, 1);
             sem_unlock(SEM_MUTEX);
             break;
         }
@@ -47,46 +39,63 @@ int main(void) {
         state->boarding_closed = 0;
         state->stack_top = 0;
         int trip = state->trip_count + 1;
+        semctl(sem_id, SEM_BRIDGE_EMPTY, SETVAL, 0);
         sem_unlock(SEM_MUTEX);
 
         log_msg("KAPITAN: Rejs %d - Otwieram wejscie (T1=%ds)", trip, state->T1);
 
-        // oczekiwanie T1 lub sygnal
-        int time_waited = 0;
-        signal_early = 0;
+        // otwarcie bramki dla pasazerow
+        struct sembuf open_gate = {SEM_ENTRY_GATE, 1000, 0};
+        semop(sem_id, &open_gate, 1);
 
-        while (time_waited < state->T1 && !signal_early && !signal_stop) {
-            sleep(1);
-            time_waited++;
+        // oczekiwanie T1 lub sygnal
+        alarm(state->T1);
+        int sig;
+        int stop_received = 0;
+        int early_depart = 0;
+
+        while (!stop_received && !early_depart) {
 
             // obsluga kolejki komunikatow
             struct msg_buf msg;
-            if (msgrcv(msg_id, &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT) != -1) {
-                if (msg.cmd == 1) signal_early = 1;
-                if (msg.cmd == 2) signal_stop = 1;
+            while (msgrcv(msg_id, &msg, sizeof(msg) - sizeof(long), 0, IPC_NOWAIT) != -1) {
+                if (msg.cmd == 1) early_depart = 1;
+                if (msg.cmd == 2) stop_received = 1;
             }
-        }
+            if (stop_received || early_depart) break;
 
-        if (signal_stop) {
-             log_msg("KAPITAN: Otrzymano STOP. Koncze zaladunek i wyplywam ostatni raz.");
+            sigwait(&set, &sig);
+            if (sig == SIGALRM) break;
+            if (sig == SIGUSR1) early_depart = 1;
+            if (sig == SIGUSR2) stop_received = 1;
         }
+        alarm(0);
 
-        // odplywanie
         sem_lock(SEM_MUTEX);
         state->ship_state = DEPARTING;
         state->boarding_closed = 1;
-        sem_unlock(SEM_MUTEX);
+        semctl(sem_id, SEM_ENTRY_GATE, SETVAL, 0);
 
         log_msg("KAPITAN: Koniec zaladunku! Prosze opuscic mostek.");
 
         // czekanie az mostek bedzie pusty
-        while (1) {
-            sem_lock(SEM_MUTEX);
-            int on_bridge = state->stack_top;
-            sem_unlock(SEM_MUTEX);
+        if (state->stack_top > 0) {
+            struct sembuf wake_lifo = {SEM_LIFO_NOTIFY, 1, 0};
+            semop(sem_id, &wake_lifo, 1);
 
-            if (on_bridge == 0) break;
-            usleep(100000);
+            sem_unlock(SEM_MUTEX);
+            struct sembuf wait_empty = {SEM_BRIDGE_EMPTY, -1, 0};
+            semop(sem_id, &wait_empty, 1);
+        } else {
+            sem_unlock(SEM_MUTEX);
+        }
+
+        if (stop_received) {
+             log_msg("KAPITAN: Otrzymano STOP. Koncze rejsy.");
+             sem_lock(SEM_MUTEX);
+             state->ship_state = FINISHED;
+             sem_unlock(SEM_MUTEX);
+             break;
         }
 
         // rejs
@@ -96,7 +105,9 @@ int main(void) {
               state->passengers_on_ship, state->bikes_on_ship);
         sem_unlock(SEM_MUTEX);
 
-        sleep(state->T2);
+        alarm(state->T2);
+        sigwait(&set, &sig);
+        alarm(0);
 
         // wyladunek
         sem_lock(SEM_MUTEX);
@@ -105,13 +116,21 @@ int main(void) {
         log_msg("KAPITAN: Doplynelismy do %s. Wyladunek.", 
                state->current_port == KRAKOW ? "Krakowa" : "Tynca");
 
-        // reset stanu statku
+        int p_count = state->passengers_on_ship;
+        sem_unlock(SEM_MUTEX);
+
+        if (p_count > 0) {
+            struct sembuf op_disembark = {SEM_DISEMBARK, p_count, 0};
+            semop(sem_id, &op_disembark, 1);
+        }
+        alarm(2);
+        sigwait(&set, &sig);
+
+        sem_lock(SEM_MUTEX);
         state->passengers_on_ship = 0;
         state->bikes_on_ship = 0;
         state->trip_count++;
         sem_unlock(SEM_MUTEX);
-
-        sleep(2);
     }
 
     log_msg("KAPITAN: Koniec pracy.");

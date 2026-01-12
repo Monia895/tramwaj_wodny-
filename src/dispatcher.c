@@ -3,18 +3,28 @@
 #include "log.h"
 #include "msg.h"
 #include <time.h>
+#include <signal.h>
 #include <sys/msg.h>
 #include <unistd.h>
+
+void handler(int sig) { (void)sig; }
 
 int main(void) {
     srand(time(NULL));
     ipc_attach();
 
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGALRM, &sa, NULL);
+
     log_msg("DYSPOZYTOR: Start pracy.");
 
     while (1) {
         // losowe oczekiwanie
-        sleep(rand() % 10 + 5);
+        alarm(rand() % 10 + 5);
+        pause();
 
         sem_lock(SEM_MUTEX);
         pid_t cap_pid = state->captain_pid;
@@ -35,9 +45,9 @@ int main(void) {
             struct msg_buf msg;
             msg.mtype = 1;
             msg.cmd = 2;
-            if (msgsnd(msg_id, &msg, sizeof(int), 0) != -1)
-                 log_msg("DYSPOZYTOR: Wyslano polecenie STOP przez kolejke MSG");
+            msgsnd(msg_id, &msg, sizeof(int), 0);
             kill(cap_pid, SIGUSR2);
+                 log_msg("DYSPOZYTOR: Wyslano polecenie STOP przez kolejke MSG");
             break;
         }
     }

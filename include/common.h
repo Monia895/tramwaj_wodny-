@@ -14,7 +14,11 @@
 // definicje semaforow
 #define SEM_BRIDGE 0
 #define SEM_MUTEX 1
-#define SEM_COUNT 2
+#define SEM_ENTRY_GATE 2
+#define SEM_LIFO_NOTIFY 3
+#define SEM_BRIDGE_EMPTY 4
+#define SEM_DISEMBARK 5
+#define SEM_COUNT 6
 
 #define MAX_K 100
 #define FIFO_NAME "/tmp/tram_log_fifo"
@@ -29,8 +33,8 @@ typedef enum {
 } ship_state_t;
 
 typedef enum {
-KRAKOW,
-TYNIEC
+    KRAKOW,
+    TYNIEC
 } port_t;
 
 // struktura pamieci dzielonej
