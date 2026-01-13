@@ -6,8 +6,8 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-#define MAX_TOTAL_PASSENGERS 5000
-#define  MAX_ACTIVE_PASSENGERS 150
+#define MAX_ACTIVE_PASSENGERS 100
+
 
 volatile sig_atomic_t keep_running = 1;
 
@@ -18,14 +18,14 @@ void cleanup_handler(int sig) {
 }
 
 void perform_cleanup(pid_t cap, pid_t disp) {
-    printf("\nSYSTEM: Rozpoczynam procedure awaryjnego zamykania...\n");
+    printf("\nSYSTEM: Sprzatanie...\n");
 
     ipc_cleanup();
     log_close_parent();
 
     if (cap > 0) kill(cap, SIGKILL);
     if (disp > 0) kill(disp, SIGKILL);
-
+    signal(SIGTERM, SIG_IGN);
     kill(0, SIGKILL);
 }
 
@@ -83,8 +83,6 @@ int main(int argc, char *argv[]) {
 
     // uruchomienie kapitana
     pid_t pid_cap = fork();
-    if (pid_cap == -1) {
-        perror("fork captain"); perform_cleanup(0,0); return 1; }
     if (pid_cap == 0) {
         signal(SIGINT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
@@ -95,8 +93,6 @@ int main(int argc, char *argv[]) {
 
     // uruchomienie dyspozytora
     pid_t pid_disp = fork();
-    if (pid_disp == -1) {
-        perror("fork dispatcher"); perform_cleanup(pid_cap,0); return 1; }
     if (pid_disp == 0) {
         signal(SIGINT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
@@ -120,11 +116,8 @@ int main(int argc, char *argv[]) {
         int status;
         pid_t ended_pid;
         while ((ended_pid = waitpid(-1, &status, WNOHANG)) > 0) {
-            if (ended_pid == pid_cap || ended_pid == pid_disp) {
-                keep_running = 0;
-            } else {
-                active_passengers--;
-            }
+            if (ended_pid == pid_cap || ended_pid == pid_disp) keep_running = 0;
+            else active_passengers--;
         }
 
         if (passengers_created < N * R * 10 && active_passengers < MAX_ACTIVE_PASSENGERS) {
@@ -134,19 +127,22 @@ int main(int argc, char *argv[]) {
                  signal(SIGTSTP, SIG_DFL);
                  signal(SIGTERM, SIG_DFL);
                  execl("./build/passenger", "passenger", NULL);
-                 perror("execl passenger");
                  exit(1);
              } else if (pid > 0) {
                  passengers_created++;
                  active_passengers++;
              }
+        } else {
+           ended_pid = waitpid(-1, &status, 0);
+            if (ended_pid > 0) {
+                 if (ended_pid == pid_cap || ended_pid == pid_disp) keep_running = 0;
+                 else active_passengers--;
+            }
         }
     }
 
-    log_msg("SYSTEM: Petla glowna zakonczona. Czekam na procesy glowne...");
-
-    if (pid_cap > 0) {
-        waitpid(pid_cap, NULL, WNOHANG);
+    if (keep_running && pid_cap > 0) {
+        waitpid(pid_cap, NULL, 0);
     }
 
     perform_cleanup(pid_cap, pid_disp);

@@ -9,67 +9,49 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-static int fifo_fd_read = -1;
-static pthread_t log_thread;
-static volatile int log_running = 1;
+int log_file_fd = -1;
 
-// watek zapisujacy logi z FIFO do pliku/konsoli
-void *logger_thread_func(void *arg) {
-    (void)arg;
-    char buf[512];
-    FILE *log_file = fopen("simulation.log", "w");
-    if (!log_file) { perror("fopen log"); return NULL; }
-
-    while (log_running) {
-        ssize_t n = read(fifo_fd_read, buf, sizeof(buf)-1);
-        if (n > 0) {
-            buf[n] = '\0';
-            fprintf(log_file, "%s", buf);
-            fprintf(stdout, "%s", buf);
-            fflush(log_file);
-            fflush(stdout);
-        } else if (n == 0) {
-            break;
-        } else {
-            if (errno != EINTR) break;
-        }
-    }
-    fclose(log_file);
-    return NULL;
-}
-
-// inicjalizacja logowania w procesie
 void log_init_parent(void) {
-    mkfifo(FIFO_NAME, 0600);
-    fifo_fd_read = open(FIFO_NAME, O_RDWR);
-    if (fifo_fd_read == -1) { perror("open fifo read"); return; }
-
-    pthread_create(&log_thread, NULL, logger_thread_func, NULL);
+    log_file_fd = open("simulation.log", O_WRONLY | O_CREAT | O_APPEND | O_TRUNC, 0644);
+    if (log_file_fd == -1) {
+        perror("Nie udalo sie otworzyc pliku logow");
+    }
 }
 
-// zamkniecie logowania i watku
 void log_close_parent(void) {
-    log_running = 0;
-    int fd = open(FIFO_NAME, O_WRONLY);
-    if(fd != -1) { write(fd, "", 0); close(fd); }
-    pthread_join(log_thread, NULL);
-    close(fifo_fd_read);
-    unlink(FIFO_NAME);
+    if (log_file_fd != -1) {
+        close(log_file_fd);
+        log_file_fd = -1;
+    }
+    unlink("/tmp/tram_log_fifo"); 
 }
 
-// funkcja wysylajaca log do FIFO
 void log_msg(const char *fmt, ...) {
+    if (log_file_fd == -1) {
+        log_file_fd = open("simulation.log", O_WRONLY | O_CREAT | O_APPEND, 0666);
+        if (log_file_fd == -1) return;
+    }
+
     char buf[512];
     va_list args;
+    
+    // Formatowanie komunikatu
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    strcat(buf, "\n");
+    
+    // Dodajemy nowa linie
+    size_t len = strlen(buf);
+    if (len < sizeof(buf) - 2) {
+        if (len == 0 || buf[len-1] != '\n') {
+            buf[len] = '\n';
+            buf[len+1] = '\0';
+            len++;
+        }
+    }
 
-    int fd = open(FIFO_NAME, O_WRONLY);
-    if (fd != -1) {
-        write(fd, buf, strlen(buf));
-        close(fd);
+    write(log_file_fd, buf, len);
+    if (strstr(buf, "SYSTEM") || strstr(buf, "KAPITAN") || strstr(buf, "DYSPOZYTOR")) {
+        write(STDOUT_FILENO, buf, len);
     }
 }
-

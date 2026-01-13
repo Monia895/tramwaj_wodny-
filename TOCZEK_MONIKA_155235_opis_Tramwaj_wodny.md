@@ -79,7 +79,7 @@ Cel: Test zakonczenia pracy
 
 ### Test 5 - Graniczne warunki
 Cel: Test w warunkach wiekszego obciazenia
--> Parametry: N=51 M=50 K=50 T1=1 T2=1 R=10
+-> Parametry: N=51 M=50 K=50 T1=2 T2=2 R=10
 - Maksymalna liczba rowerow 
 - Jednoczesne wejscie wielu pasazerow
 - Osiagniecie limitu R rejsow
