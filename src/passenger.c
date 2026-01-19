@@ -3,6 +3,7 @@
 #include "ipc.h"
 #include "log.h"
 #include <time.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 int main(void) {
@@ -11,24 +12,25 @@ int main(void) {
 
     // losowanie atrybutow pasazera
     pid_t my_pid = getpid();
+    port_t my_port = (rand() % 2 == 0) ? KRAKOW : TYNIEC;
     int has_bike = (rand() % 100 < 30);
     int weight = has_bike ? 2 : 1;
 
-    // czekanie na statek
-    while (1) {
-        struct sembuf wait_gate = {SEM_ENTRY_GATE, -1, 0};
-        if (semop(sem_id, &wait_gate, 1) == -1) {
-             if (errno == EINTR) continue;
-             return 0;
-        }
+    log_msg("PASAZER %d: Pojawil sie w porcie: %s.", my_pid,
+            (my_port == KRAKOW) ? "KRAKOW" : "TYNIEC");
 
-        sem_lock(SEM_MUTEX);
-        if (state->ship_state == FINISHED) {
-            sem_unlock(SEM_MUTEX);
-            ipc_detach();
-            return 0;
-        }
-        if (state->ship_state == LOADING && !state->boarding_closed) {
+    while (1) {
+        while (1) {
+            struct sembuf wait_gate = {SEM_ENTRY_GATE, -1, 0};
+            semop(sem_id, &wait_gate, 1);
+
+            sem_lock(SEM_MUTEX);
+            if (state->ship_state == FINISHED) {
+                sem_unlock(SEM_MUTEX);
+                ipc_detach();
+                return 0;
+            }
+            if (state->current_port == my_port && state->ship_state == LOADING && !state->boarding_closed) {
             sem_unlock(SEM_MUTEX);
             break;
         }
@@ -42,13 +44,11 @@ int main(void) {
     if (state->boarding_closed || state->ship_state != LOADING) {
         sem_unlock(SEM_MUTEX);
         sem_signal_bridge(weight);
-        ipc_detach();
-        return 0;
+        continue;
     }
 
-    int my_stack_idx = state->stack_top;
-    if (my_stack_idx < MAX_K) {
-        state->bridge_stack[my_stack_idx] = my_pid;
+    if (state->stack_top < MAX_K) {
+        state->bridge_stack[state->stack_top] = my_pid;
         state->stack_top++;
     }
 
@@ -78,7 +78,7 @@ int main(void) {
                 }
             }
 
-            log_msg("PASAZER %d: Wszedl na statek.", my_pid);
+            log_msg("PASAZER %d: Wszedl na statek.", my_pid, (my_port == KRAKOW) ? "KRAKOW" : "TYNIEC");
         } else {
             log_msg("PASAZER %d: Brak miejsca!", my_pid);
         }
@@ -113,8 +113,7 @@ int main(void) {
         }
 
         sem_signal_bridge(weight);
-        ipc_detach();
-        return 0;
+        continue;
     }
 
     sem_signal_bridge(weight);
@@ -123,9 +122,17 @@ int main(void) {
     struct sembuf wait_disembark = {SEM_DISEMBARK, -1, 0};
     semop(sem_id, &wait_disembark, 1);
 
-    sem_lock(SEM_MUTEX);
-    log_msg("PASAZER %d: Wysiada.", my_pid);
-    sem_unlock(SEM_MUTEX);
+    my_port = (my_port == KRAKOW) ? TYNIEC : KRAKOW;
+        log_msg("PASAZER %d: Wysiadl w: %s.", my_pid, (my_port == KRAKOW) ? "KRAKOW" : "TYNIEC");
+
+        // Decyzja czy wracam (50% szans)
+        int will_return = (rand() % 100 < 50);
+        if (!will_return) {
+            log_msg("PASAZER %d: Idzie do domu.", my_pid);
+            break;
+        }
+        log_msg("PASAZER %d: Czeka na powrot.", my_pid);
+    }
 
     ipc_detach();
     return 0;

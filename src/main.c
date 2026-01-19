@@ -5,11 +5,47 @@
 #include "log.h"
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <signal.h>
+#include <pthread.h>
+#include <errno.h>
 
-#define MAX_ACTIVE_PASSENGERS 100
+#define MAX_ACTIVE_PASSENGERS 10000
 
 
 volatile sig_atomic_t keep_running = 1;
+int active_passengers = 0;
+pid_t pid_cap = 0;
+pid_t pid_disp = 0;
+
+pthread_mutex_t count_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// watek czyszczacy
+void *zombie_cleaner_func(void *arg) {
+    (void)arg;
+    int status;
+    pid_t pid;
+
+    while (keep_running || active_passengers > 0) {
+        pid = waitpid(-1, &status, WNOHANG);
+
+        if (pid > 0) {
+            if (pid == pid_cap || pid == pid_disp) {
+                keep_running = 0;
+            } else {
+                pthread_mutex_lock(&count_mutex);
+                if (active_passengers > 0) active_passengers--;
+                pthread_mutex_unlock(&count_mutex);
+            }
+        }
+        else if (pid == 0) {
+            usleep(50000); // 50ms przerwy, żeby nie spalić CPU
+        }
+        else {
+            if (errno == ECHILD) usleep(100000);
+        }
+    }
+    return NULL;
+}
 
 // handler sprzatajacy
 void cleanup_handler(int sig) {
@@ -17,14 +53,14 @@ void cleanup_handler(int sig) {
     keep_running = 0;
 }
 
-void perform_cleanup(pid_t cap, pid_t disp) {
+void perform_cleanup(void) {
     printf("\nSYSTEM: Sprzatanie...\n");
 
     ipc_cleanup();
     log_close_parent();
 
-    if (cap > 0) kill(cap, SIGKILL);
-    if (disp > 0) kill(disp, SIGKILL);
+    if (pid_cap > 0) kill(pid_cap, SIGKILL);
+    if (pid_disp > 0) kill(pid_disp, SIGKILL);
     signal(SIGTERM, SIG_IGN);
     kill(0, SIGKILL);
 }
@@ -43,7 +79,6 @@ int main(int argc, char *argv[]) {
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGTSTP, &sa, NULL);
 
     // pobieranie i walidacja parametrow
     printf("Podaj parametry (N M K T1 T2 R): ");
@@ -81,11 +116,17 @@ int main(int argc, char *argv[]) {
 
     log_msg("SYSTEM: Start symulacji. N=%d, M=%d, K=%d", N, M, K);
 
+    // start watku czyszczacego
+    pthread_t cleaner_thread;
+    if (pthread_create(&cleaner_thread, NULL, zombie_cleaner_func, NULL) != 0) {
+        perror("Thread error");
+        return 1;
+    }
+
     // uruchomienie kapitana
     pid_t pid_cap = fork();
     if (pid_cap == 0) {
         signal(SIGINT, SIG_DFL);
-        signal(SIGTSTP, SIG_DFL);
         execl("./build/captain", "captain", NULL);
         perror("execl captain");
         exit(1);
@@ -95,7 +136,6 @@ int main(int argc, char *argv[]) {
     pid_t pid_disp = fork();
     if (pid_disp == 0) {
         signal(SIGINT, SIG_DFL);
-        signal(SIGTSTP, SIG_DFL);
         execl("./build/dispatcher", "dispatcher", NULL);
         perror("execl dispatcher");
         exit(1);
@@ -103,7 +143,6 @@ int main(int argc, char *argv[]) {
 
 
     int passengers_created = 0;
-    int active_passengers = 0;
 
     while (keep_running) {
         sem_lock(SEM_MUTEX);
@@ -113,39 +152,34 @@ int main(int argc, char *argv[]) {
         }
         sem_unlock(SEM_MUTEX);
 
-        int status;
-        pid_t ended_pid;
-        while ((ended_pid = waitpid(-1, &status, WNOHANG)) > 0) {
-            if (ended_pid == pid_cap || ended_pid == pid_disp) keep_running = 0;
-            else active_passengers--;
-        }
+        int current_active;
+        pthread_mutex_lock(&count_mutex);
+        current_active = active_passengers;
+        pthread_mutex_unlock(&count_mutex);
 
-        if (passengers_created < N * R * 10 && active_passengers < MAX_ACTIVE_PASSENGERS) {
+        if (passengers_created < N * R * 10 && current_active < MAX_ACTIVE_PASSENGERS) {
             pid_t pid = fork();
              if (pid == 0) {
                  signal(SIGINT, SIG_DFL);
-                 signal(SIGTSTP, SIG_DFL);
                  signal(SIGTERM, SIG_DFL);
                  execl("./build/passenger", "passenger", NULL);
                  exit(1);
              } else if (pid > 0) {
                  passengers_created++;
+                 pthread_mutex_lock(&count_mutex);
                  active_passengers++;
+                 pthread_mutex_unlock(&count_mutex);
              }
         } else {
-           ended_pid = waitpid(-1, &status, 0);
-            if (ended_pid > 0) {
-                 if (ended_pid == pid_cap || ended_pid == pid_disp) keep_running = 0;
-                 else active_passengers--;
-            }
+            custom_sleep(1);
         }
     }
 
-    if (keep_running && pid_cap > 0) {
-        waitpid(pid_cap, NULL, 0);
-    }
+    if (keep_running && pid_cap > 0) waitpid(pid_cap, NULL, 0);
 
-    perform_cleanup(pid_cap, pid_disp);
+    pthread_join(cleaner_thread, NULL);
+    pthread_mutex_destroy(&count_mutex);
+    perform_cleanup();
 
     return 0;
 }
