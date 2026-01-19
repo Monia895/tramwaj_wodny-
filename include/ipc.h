@@ -16,4 +16,6 @@ void sem_wait_bridge(int weight);
 void sem_signal_bridge(int weight);
 void sem_op(int sem_num, int op_val);
 
+void custom_sleep(int t);
+
 #endif

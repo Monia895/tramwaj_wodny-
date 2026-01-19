@@ -1,11 +1,13 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define _DEFAULT_SOURCE
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -20,8 +22,7 @@
 #define SEM_DISEMBARK 5
 #define SEM_COUNT 6
 
-#define MAX_K 100
-#define FIFO_NAME "/tmp/tram_log_fifo"
+#define MAX_K 10000 // Max pojemnosc mostka
 
 // stany statku
 typedef enum {
@@ -48,7 +49,6 @@ typedef struct {
     ship_state_t ship_state;
     port_t current_port;
     int boarding_closed;
-
     pid_t captain_pid;
 
     pid_t bridge_stack[MAX_K]; // stos dla mechanizmu LIFO

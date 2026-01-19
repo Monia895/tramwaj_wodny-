@@ -1,11 +1,10 @@
-#define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include "ipc.h"
 #include "log.h"
 #include "msg.h"
 #include <sys/msg.h>
 #include <unistd.h>
-#include <time.h>
+#include <signal.h>
 
 int main(void) {
     ipc_attach();
@@ -38,14 +37,12 @@ int main(void) {
         state->ship_state = LOADING;
         state->boarding_closed = 0;
         state->stack_top = 0;
-        int trip = state->trip_count + 1;
-        semctl(sem_id, SEM_BRIDGE_EMPTY, SETVAL, 0);
         sem_unlock(SEM_MUTEX);
 
-        log_msg("KAPITAN: Rejs %d - Otwieram wejscie (T1=%ds)", trip, state->T1);
+        log_msg("KAPITAN: Rejs %d - Otwieram wejscie (T1=%ds)", state->trip_count + 1, state->T1);
 
         // otwarcie bramki dla pasazerow
-        struct sembuf open_gate = {SEM_ENTRY_GATE, 1000, 0};
+        struct sembuf open_gate = {SEM_ENTRY_GATE, 2000, 0};
         semop(sem_id, &open_gate, 1);
 
         // oczekiwanie T1 lub sygnal
@@ -76,7 +73,7 @@ int main(void) {
         state->boarding_closed = 1;
         semctl(sem_id, SEM_ENTRY_GATE, SETVAL, 0);
 
-        log_msg("KAPITAN: Koniec zaladunku! Prosze opuscic mostek.");
+        log_msg("KAPITAN: Zamykam wejscie.");
 
         // czekanie az mostek bedzie pusty
         if (state->stack_top > 0) {
@@ -92,9 +89,7 @@ int main(void) {
 
         if (stop_received) {
              log_msg("KAPITAN: Otrzymano STOP. Koncze rejsy.");
-             sem_lock(SEM_MUTEX);
              state->ship_state = FINISHED;
-             sem_unlock(SEM_MUTEX);
              break;
         }
 
@@ -105,26 +100,26 @@ int main(void) {
               state->passengers_on_ship, state->bikes_on_ship);
         sem_unlock(SEM_MUTEX);
 
-        alarm(state->T2);
-        sigwait(&set, &sig);
-        alarm(0);
+        log_msg("KAPITAN: Plyne (T2=%d)...", state->T2);
+
+        custom_sleep(state->T2);
 
         // wyladunek
         sem_lock(SEM_MUTEX);
         state->ship_state = UNLOADING;
         state->current_port = (state->current_port == KRAKOW) ? TYNIEC : KRAKOW;
-        log_msg("KAPITAN: Doplynelismy do %s. Wyladunek.", 
-               state->current_port == KRAKOW ? "Krakowa" : "Tynca");
-
         int p_count = state->passengers_on_ship;
         sem_unlock(SEM_MUTEX);
+
+        log_msg("KAPITAN: Doplynelismy do %s. Wyladunek.", 
+               state->current_port == KRAKOW ? "Krakowa" : "Tynca");
 
         if (p_count > 0) {
             struct sembuf op_disembark = {SEM_DISEMBARK, p_count, 0};
             semop(sem_id, &op_disembark, 1);
         }
-        alarm(2);
-        sigwait(&set, &sig);
+
+        custom_sleep(1);
 
         sem_lock(SEM_MUTEX);
         state->passengers_on_ship = 0;

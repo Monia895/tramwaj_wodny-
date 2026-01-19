@@ -1,13 +1,10 @@
-#define _DEFAULT_SOURCE
-#define _POSIX_C_SOURCE 200809L
 #include "log.h"
-#include "common.h"
+#include <stdio.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include <string.h>
-#include <pthread.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <time.h>
 
 int log_file_fd = -1;
 
@@ -19,11 +16,7 @@ void log_init_parent(void) {
 }
 
 void log_close_parent(void) {
-    if (log_file_fd != -1) {
-        close(log_file_fd);
-        log_file_fd = -1;
-    }
-    unlink("/tmp/tram_log_fifo"); 
+    if (log_file_fd != -1) close(log_file_fd);
 }
 
 void log_msg(const char *fmt, ...) {
@@ -43,11 +36,9 @@ void log_msg(const char *fmt, ...) {
     // Dodajemy nowa linie
     size_t len = strlen(buf);
     if (len < sizeof(buf) - 2) {
-        if (len == 0 || buf[len-1] != '\n') {
             buf[len] = '\n';
             buf[len+1] = '\0';
             len++;
-        }
     }
 
     write(log_file_fd, buf, len);
