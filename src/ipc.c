@@ -11,7 +11,7 @@ shared_state_t *state = NULL;
 
 void custom_sleep(int t) {
     if (t > 0) {
-        usleep(t * 1000000); 
+//        usleep(t * 1000000);
     }
 }
 

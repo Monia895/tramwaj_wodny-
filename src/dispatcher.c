@@ -29,7 +29,7 @@ int main(void) {
     while (attempts < MAX_ATTEMPTS) {
         attempts++;
 
-        custom_sleep(rand() % 5 + 3);
+//        custom_sleep(rand() % 5 + 3);
 
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {

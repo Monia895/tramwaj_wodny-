@@ -25,23 +25,26 @@ void *zombie_cleaner_func(void *arg) {
     int status;
     pid_t pid;
 
-    while (keep_running || active_passengers > 0) {
-        pid = waitpid(-1, &status, WNOHANG);
+    while (1) {
+        pid = waitpid(-1, &status, 0);
 
         if (pid > 0) {
-            if (pid == pid_cap || pid == pid_disp) {
+            if (pid == pid_cap) {
                 keep_running = 0;
-            } else {
+                if (pid_disp > 0) kill(pid_disp, SIGKILL);
+                kill(0, SIGKILL);
+                return NULL;
+            }
+            else if (pid != pid_disp) {
                 pthread_mutex_lock(&count_mutex);
                 if (active_passengers > 0) active_passengers--;
                 pthread_mutex_unlock(&count_mutex);
             }
         }
-        else if (pid == 0) {
-            usleep(50000); // 50ms przerwy, żeby nie spalić CPU
-        }
         else {
-            if (errno == ECHILD) usleep(100000);
+            if (errno == ECHILD) {
+                return NULL;
+            }
         }
     }
     return NULL;
@@ -148,6 +151,7 @@ int main(int argc, char *argv[]) {
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
             sem_unlock(SEM_MUTEX);
+            keep_running = 0;
             break;
         }
         sem_unlock(SEM_MUTEX);
@@ -171,15 +175,17 @@ int main(int argc, char *argv[]) {
                  pthread_mutex_unlock(&count_mutex);
              }
         } else {
-            custom_sleep(1);
+  //          custom_sleep(1);
         }
+//        usleep(100000);
     }
 
-    if (keep_running && pid_cap > 0) waitpid(pid_cap, NULL, 0);
-
+    printf("\nSYSTEM: Czekam na zakonczenie watku sprzatajacego...\n");
     pthread_join(cleaner_thread, NULL);
     pthread_mutex_destroy(&count_mutex);
+
     perform_cleanup();
+    printf("SYSTEM: Koniec.\n");
 
     return 0;
 }

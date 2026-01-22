@@ -89,7 +89,20 @@ int main(void) {
 
         if (stop_received) {
              log_msg("KAPITAN: Otrzymano STOP. Koncze rejsy.");
+
+             sem_lock(SEM_MUTEX);
+             int p_on_board = state->passengers_on_ship;
              state->ship_state = FINISHED;
+             sem_unlock(SEM_MUTEX);
+
+             struct sembuf open_entry = {SEM_ENTRY_GATE, 1000, 0};
+             semop(sem_id, &open_entry, 1);
+
+             if (p_on_board > 0) {
+                 struct sembuf op_disembark = {SEM_DISEMBARK, p_on_board, 0};
+                 semop(sem_id, &op_disembark, 1);
+             }
+
              break;
         }
 

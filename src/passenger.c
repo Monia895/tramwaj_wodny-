@@ -35,6 +35,10 @@ int main(void) {
             break;
         }
         sem_unlock(SEM_MUTEX);
+
+        struct sembuf give_back = {SEM_ENTRY_GATE, 1, 0};
+        semop(sem_id, &give_back, 1);
+//        usleep(200000);
     }
 
     // wejscie na mostek
@@ -137,4 +141,3 @@ int main(void) {
     ipc_detach();
     return 0;
 }
-

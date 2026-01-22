@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -22,7 +23,7 @@
 #define SEM_DISEMBARK 5
 #define SEM_COUNT 6
 
-#define MAX_K 10000 // Max pojemnosc mostka
+#define MAX_K 1000 // Max pojemnosc mostka
 
 // stany statku
 typedef enum {
