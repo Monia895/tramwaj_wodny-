@@ -29,7 +29,7 @@ int main(void) {
     while (attempts < MAX_ATTEMPTS) {
         attempts++;
 
-//        custom_sleep(rand() % 5 + 3);
+        custom_sleep(rand() % 5 + 3);
 
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
@@ -40,14 +40,14 @@ int main(void) {
         ship_state_t st = state->ship_state;
         sem_unlock(SEM_MUTEX);
 
-        int action = rand() % 100;
+        int action = rand() % 1000;
 
-        if (action < 15 && st == LOADING) {
+        if (cap_pid > 0 && action < 15 && st == LOADING) {
             // sygnal 1: Odplywaj wczesniej (SIGUSR1)
             log_msg("DYSPOZYTOR: Nakaz wczesniejszego wyplyniecia (SIGUSR1)");
             kill(cap_pid, SIGUSR1);
         }
-        else if (action >= 98) {
+        else if (cap_pid > 0 && action >= 998) {
             // sygnal 2: Koniec pracy (SIGUSR2)
             struct msg_buf msg;
             msg.mtype = 1;

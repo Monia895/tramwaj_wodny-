@@ -11,6 +11,7 @@
 
 #define MAX_ACTIVE_PASSENGERS 10000
 
+void perform_cleanup(void);
 
 volatile sig_atomic_t keep_running = 1;
 int active_passengers = 0;
@@ -53,7 +54,8 @@ void *zombie_cleaner_func(void *arg) {
 // handler sprzatajacy
 void cleanup_handler(int sig) {
      (void)sig;
-    keep_running = 0;
+     keep_running = 0;
+     perform_cleanup();
 }
 
 void perform_cleanup(void) {
@@ -64,7 +66,7 @@ void perform_cleanup(void) {
 
     if (pid_cap > 0) kill(pid_cap, SIGKILL);
     if (pid_disp > 0) kill(pid_disp, SIGKILL);
-    signal(SIGTERM, SIG_IGN);
+    signal(SIGTERM, SIG_DFL);
     kill(0, SIGKILL);
 }
 
@@ -76,6 +78,8 @@ int main(int argc, char *argv[]) {
     int N, M, K, T1, T2, R;
 
     // rejestracja sygnalow
+
+
     struct sigaction sa;
     sa.sa_handler = cleanup_handler;
     sigemptyset(&sa.sa_mask);
