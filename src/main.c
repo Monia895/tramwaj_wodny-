@@ -98,8 +98,8 @@ int main(int argc, char *argv[]) {
 
     if (N > 500) { fprintf(stderr, "Za duze N. Max 500.\n"); return 1; }
 
-    if (N <= 0 || M < 0 || K <= 0 || T1 <= 0 || T2 <= 0 || R <= 0) {
-        fprintf(stderr, "Blad: Parametry musza byc dodatnie (M >= 0).\n");
+    if (N < 0 || M < 0 || K < 0 || T1 < 0 || T2 < 0 || R < 0) {
+        fprintf(stderr, "Blad: Parametry musza byc dodatnie.\n");
         return 1;
     }
     if (M >= N) {
@@ -114,6 +114,9 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Blad: Maksymalna obslugiwana pojemnosc mostka to %d.\n", MAX_K);
         return 1;
     }
+
+    if (T1 <= 0) T1 = 1;
+    if (T2 <= 0) T2 = 1;
 
     // inicjalizacja loggera (tworzy FIFO)
     log_init_parent();
@@ -179,9 +182,9 @@ int main(int argc, char *argv[]) {
                  pthread_mutex_unlock(&count_mutex);
              }
         } else {
-  //          custom_sleep(1);
+           custom_sleep(1);
         }
-//        usleep(100000);
+        usleep(100000);
     }
 
     printf("\nSYSTEM: Czekam na zakonczenie watku sprzatajacego...\n");

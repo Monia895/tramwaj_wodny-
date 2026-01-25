@@ -27,12 +27,12 @@ void log_msg(const char *fmt, ...) {
 
     char buf[512];
     va_list args;
-    
+
     // Formatowanie komunikatu
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    
+
     // Dodajemy nowa linie
     size_t len = strlen(buf);
     if (len < sizeof(buf) - 2) {

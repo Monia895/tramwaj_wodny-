@@ -17,11 +17,10 @@
 // definicje semaforow
 #define SEM_BRIDGE 0
 #define SEM_MUTEX 1
-#define SEM_ENTRY_GATE 2
-#define SEM_LIFO_NOTIFY 3
-#define SEM_BRIDGE_EMPTY 4
-#define SEM_DISEMBARK 5
-#define SEM_COUNT 6
+#define SEM_LIFO_NOTIFY 2
+#define SEM_BRIDGE_EMPTY 3
+#define SEM_DISEMBARK 4
+#define SEM_COUNT 5
 
 #define MAX_K 1000 // Max pojemnosc mostka
 
@@ -59,7 +58,6 @@ typedef struct {
 // zmienne globalne
 extern int shm_id;
 extern int sem_id;
-extern int msg_id;
 extern shared_state_t *state;
 
 #endif

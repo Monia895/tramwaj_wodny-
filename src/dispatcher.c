@@ -2,7 +2,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "ipc.h"
 #include "log.h"
-#include "msg.h"
 #include <time.h>
 #include <signal.h>
 #include <sys/msg.h>
@@ -11,7 +10,7 @@
 
 void handler(int sig) { (void)sig; }
 
-int main(void) {
+ int main(void) {
     srand(time(NULL));
     ipc_attach();
 
@@ -29,7 +28,7 @@ int main(void) {
     while (attempts < MAX_ATTEMPTS) {
         attempts++;
 
-        custom_sleep(rand() % 5 + 3);
+        custom_sleep(10 + (rand() % 20));
 
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
@@ -42,24 +41,19 @@ int main(void) {
 
         int action = rand() % 1000;
 
-        if (cap_pid > 0 && action < 15 && st == LOADING) {
+        if (cap_pid > 0 && action < 150 && st == LOADING) {
             // sygnal 1: Odplywaj wczesniej (SIGUSR1)
-            log_msg("DYSPOZYTOR: Nakaz wczesniejszego wyplyniecia (SIGUSR1)");
+            log_msg("DYSPOZYTOR: Wysylam SIGUSR1 do kapitana PID=%d", cap_pid);
             kill(cap_pid, SIGUSR1);
         }
-        else if (cap_pid > 0 && action >= 998) {
+        else if (cap_pid > 0 && action >= 990) {
             // sygnal 2: Koniec pracy (SIGUSR2)
-            struct msg_buf msg;
-            msg.mtype = 1;
-            msg.cmd = 2;
-            msgsnd(msg_id, &msg, sizeof(int), 0);
 
-            log_msg("DYSPOZYTOR: Wyslano polecenie STOP przez kolejke MSG");
+            log_msg("DYSPOZYTOR: Wysylam SIGUSR2 (koniec pracy) do kapitana PID=%d", cap_pid);
             kill(cap_pid, SIGUSR2);
             break;
         }
     }
-
     log_msg("DYSPOZYTOR: Koniec pracy.");
     ipc_detach();
     return 0;

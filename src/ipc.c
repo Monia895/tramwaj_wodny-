@@ -1,17 +1,15 @@
 #include "ipc.h"
-#include "msg.h"
 #include <sys/msg.h>
 #include <string.h>
 
 // zmienne globalne
 int shm_id = -1;
 int sem_id = -1;
-int msg_id = -1;
 shared_state_t *state = NULL;
 
 void custom_sleep(int t) {
     if (t > 0) {
-//        usleep(t * 1000000);
+        usleep(t * 1000000);
     }
 }
 
@@ -39,14 +37,9 @@ void ipc_init_all(int N, int M, int K, int T1, int T2, int R) {
     // ustawienie wartosci poczatkowych
     semctl(sem_id, SEM_BRIDGE, SETVAL, K);
     semctl(sem_id, SEM_MUTEX, SETVAL, 1);
-    semctl(sem_id, SEM_ENTRY_GATE, SETVAL, 0);
     semctl(sem_id, SEM_LIFO_NOTIFY, SETVAL, 0);
     semctl(sem_id, SEM_BRIDGE_EMPTY, SETVAL, 0);
     semctl(sem_id, SEM_DISEMBARK, SETVAL, 0);
-
-    // tworzenie kolejki komunikatow
-    msg_id = msgget(key, IPC_CREAT | 0600);
-    if (msg_id == -1) { perror("msgget"); exit(1); }
 }
 
 // podlaczanie procesu do istniejacych zasobow
@@ -56,7 +49,6 @@ void ipc_attach(void) {
     shm_id = shmget(key, sizeof(shared_state_t), 0);
     state = shmat(shm_id, NULL, 0);
     sem_id = semget(key, SEM_COUNT, 0);
-    msg_id = msgget(key, 0);
 }
 
 // odlaczanie pamieci
@@ -69,7 +61,6 @@ void ipc_cleanup(void) {
     if (state) shmdt(state);
     if (shm_id != -1) shmctl(shm_id, IPC_RMID, NULL);
     if (sem_id != -1) semctl(sem_id, 0, IPC_RMID);
-    if (msg_id != -1) msgctl(msg_id, IPC_RMID, NULL);
     unlink("/tmp/tram_log_fifo");
 }
 
