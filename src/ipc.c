@@ -7,11 +7,11 @@ int shm_id = -1;
 int sem_id = -1;
 shared_state_t *state = NULL;
 
-void custom_sleep(int t) {
-    if (t > 0) {
-        usleep(t * 1000000);
-    }
-}
+// void custom_sleep(int t) {
+//    if (t > 0) {
+//        usleep(t * 1000000);
+//    }
+// }
 
 // tworzenie wszystkich zasobow IPC
 void ipc_init_all(int N, int M, int K, int T1, int T2, int R) {

@@ -46,8 +46,6 @@ int main(void) {
         log_msg("KAPITAN:  REJS %d/%d  Port: %s",
                state->trip_count + 1, state->R,
                (state->current_port == KRAKOW) ? "KRAKOW" : "TYNIEC");
-
-        log_msg("KAPITAN: Rozpoczynam zaladunek (T1=%d sekund)", state->T1);
         sem_unlock(SEM_MUTEX);
 
         // Oczekiwanie na zaladunek: T1 lub SIGUSR1
@@ -94,7 +92,7 @@ int main(void) {
                 log_msg("KAPITAN: Pasazerowie opuszczaja statek...");
                 struct sembuf disembark_all = {SEM_DISEMBARK, state->passengers_on_ship, 0};
                 semop(sem_id, &disembark_all, 1);
-                custom_sleep(2);
+//                custom_sleep(2);
             }
             break;
         }
@@ -114,64 +112,41 @@ int main(void) {
 
             log_msg("KAPITAN: Mostek pusty");
 
-            // Ponowna blokada mutexu
             sem_lock(SEM_MUTEX);
-        } else {
-            log_msg("KAPITAN: Mostek pusty - gotowy do odjazdu");
         }
 
-        if (state->passengers_on_ship == 0) {
-            log_msg("KAPITAN: Brak pasażerów - rejs się nie odbywa");
-            state->trip_count++;
-            state->current_port = (state->current_port == KRAKOW) ? TYNIEC : KRAKOW;
-            sem_unlock(SEM_MUTEX);
-            log_msg("KAPITAN: Przechodzimy do portu %s",
-                   (state->current_port == KRAKOW) ? "KRAKOW" : "TYNIEC");
-            custom_sleep(1);
-            continue;
-        }
-        // Rejs
         state->ship_state = SAILING;
-        log_msg("KAPITAN: OdplywamyY z %s do %s! Na pokladzie: %d pasazerow, %d rowerow",
-               (state->current_port == KRAKOW) ? "KRAKOW" : "TYNIEC",
-               (state->current_port == KRAKOW) ? "TYNCA" : "KRAKOWA",
-               state->passengers_on_ship, state->bikes_on_ship);
+
+        log_msg("KAPITAN: Plyne! Pasazerow: %d", state->passengers_on_ship);
         sem_unlock(SEM_MUTEX);
 
-        // Symulacja rejsu
-        log_msg("KAPITAN: Rejs trwa %d sekund...", state->T2);
-        custom_sleep(state->T2);
+  //      custom_sleep(state->T2);
 
-        // Wyladunek
+        // doplyniecie i wyladunek
         sem_lock(SEM_MUTEX);
         state->ship_state = UNLOADING;
 
-        port_t old_port = state->current_port;
         state->current_port = (state->current_port == KRAKOW) ? TYNIEC : KRAKOW;
         int p_count = state->passengers_on_ship;
-        int b_count = state->bikes_on_ship;
-        log_msg("KAPITAN: Doplynelismy do %s. Wysiadka %d pasazerow, %d rowerow",
-               (state->current_port == KRAKOW) ? "KRAKOWA" : "TYNCA",
-               p_count, b_count);
+
+        log_msg("KAPITAN: Doplynelismy do %s.", (state->current_port == KRAKOW) ? "KRAKOWA" : "TYNCA");
         sem_unlock(SEM_MUTEX);
+
         if (p_count > 0) {
+            // sygnal dla pasazerow zeby wysiedli
             struct sembuf op_disembark = {SEM_DISEMBARK, p_count, 0};
             semop(sem_id, &op_disembark, 1);
-            // Daj czas na wysiadkę
-            custom_sleep(2);
+    //        custom_sleep(1);
+        } else {
+      //      custom_sleep(1);
         }
+
+        // koniec cyklu
         sem_lock(SEM_MUTEX);
         state->passengers_on_ship = 0;
         state->bikes_on_ship = 0;
         state->trip_count++;
-        log_msg("KAPITAN: Rejs %d zakonczony. Przeplynieto: %s -> %s",
-               state->trip_count,
-               (old_port == KRAKOW) ? "KRAKOW" : "TYNIEC",
-               (state->current_port == KRAKOW) ? "KRAKOW" : "TYNIEC");
-
-        log_msg("KAPITAN: Pozostalo rejsow: %d", state->R - state->trip_count);
         sem_unlock(SEM_MUTEX);
-
     }
 
     log_msg("KAPITAN: Koniec pracy. Wykonano %d rejsow.", state->trip_count);

@@ -23,12 +23,22 @@ void handler(int sig) { (void)sig; }
     log_msg("DYSPOZYTOR: Start pracy.");
 
     int attempts = 0;
-    const int MAX_ATTEMPTS = 50;
+    const int MAX_ATTEMPTS = 500;
 
     while (attempts < MAX_ATTEMPTS) {
         attempts++;
 
-        custom_sleep(10 + (rand() % 20));
+       int sleep_time = 5 + (rand() % 10);
+
+        for (int i = 0; i < sleep_time * 10; i++) {
+            sem_lock(SEM_MUTEX);
+            if (state->ship_state == FINISHED) {
+                sem_unlock(SEM_MUTEX);
+                goto end_work;
+            }
+            sem_unlock(SEM_MUTEX);
+  //          usleep(100000);
+        }
 
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
@@ -41,12 +51,12 @@ void handler(int sig) { (void)sig; }
 
         int action = rand() % 1000;
 
-        if (cap_pid > 0 && action < 150 && st == LOADING) {
+        if (cap_pid > 0 && action < 200 && st == LOADING) {
             // sygnal 1: Odplywaj wczesniej (SIGUSR1)
             log_msg("DYSPOZYTOR: Wysylam SIGUSR1 do kapitana PID=%d", cap_pid);
             kill(cap_pid, SIGUSR1);
         }
-        else if (cap_pid > 0 && action >= 990) {
+        else if (cap_pid > 0 && action >= 995) {
             // sygnal 2: Koniec pracy (SIGUSR2)
 
             log_msg("DYSPOZYTOR: Wysylam SIGUSR2 (koniec pracy) do kapitana PID=%d", cap_pid);
@@ -54,6 +64,8 @@ void handler(int sig) { (void)sig; }
             break;
         }
     }
+
+end_work:
     log_msg("DYSPOZYTOR: Koniec pracy.");
     ipc_detach();
     return 0;

@@ -11,62 +11,51 @@
 
 #define MAX_ACTIVE_PASSENGERS 10000
 
-void perform_cleanup(void);
-
 volatile sig_atomic_t keep_running = 1;
 int active_passengers = 0;
 pid_t pid_cap = 0;
 pid_t pid_disp = 0;
+int finished_passengers = 0;
 
 pthread_mutex_t count_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// watek czyszczacy
-void *zombie_cleaner_func(void *arg) {
-    (void)arg;
-    int status;
-    pid_t pid;
-
-    while (1) {
-        pid = waitpid(-1, &status, 0);
-
-        if (pid > 0) {
-            if (pid == pid_cap) {
-                keep_running = 0;
-                if (pid_disp > 0) kill(pid_disp, SIGKILL);
-                kill(0, SIGKILL);
-                return NULL;
-            }
-            else if (pid != pid_disp) {
-                pthread_mutex_lock(&count_mutex);
-                if (active_passengers > 0) active_passengers--;
-                pthread_mutex_unlock(&count_mutex);
-            }
-        }
-        else {
-            if (errno == ECHILD) {
-                return NULL;
-            }
-        }
-    }
-    return NULL;
-}
+void perform_cleanup(void);
 
 // handler sprzatajacy
 void cleanup_handler(int sig) {
      (void)sig;
      keep_running = 0;
-     perform_cleanup();
+}
+
+// watek czyszczacy
+void *zombie_cleaner_func(void *arg) {
+    (void)arg;
+    while (keep_running || active_passengers > 0) {
+        int status;
+        pid_t pid = waitpid(-1, &status, WNOHANG);
+
+        if (pid > 0) {
+            if (pid == pid_cap) {
+                keep_running = 0;
+            }
+            else if (pid != pid_disp) {
+                pthread_mutex_lock(&count_mutex);
+                if (active_passengers > 0) active_passengers--;
+                finished_passengers++;
+                pthread_mutex_unlock(&count_mutex);
+            }
+        } else {
+//            usleep(50000);
+        }
+    }
+    return NULL;
 }
 
 void perform_cleanup(void) {
-    printf("\nSYSTEM: Sprzatanie...\n");
 
     ipc_cleanup();
     log_close_parent();
 
-    if (pid_cap > 0) kill(pid_cap, SIGKILL);
-    if (pid_disp > 0) kill(pid_disp, SIGKILL);
-    signal(SIGTERM, SIG_DFL);
     kill(0, SIGKILL);
 }
 
@@ -74,6 +63,8 @@ int main(int argc, char *argv[]) {
 
     (void)argc;
     (void)argv;
+
+    setbuf(stdout, NULL);
 
     int N, M, K, T1, T2, R;
 
@@ -85,7 +76,6 @@ int main(int argc, char *argv[]) {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
 
     // pobieranie i walidacja parametrow
     printf("Podaj parametry (N M K T1 T2 R): ");
@@ -124,7 +114,14 @@ int main(int argc, char *argv[]) {
     // inicjalizacja IPC
     ipc_init_all(N, M, K, T1, T2, R);
 
+    int max_capacity = (N * R) / 2;
+
+    int target_passengers = (int)(max_capacity * 0.8);
+
+    if (target_passengers < 1) target_passengers = 1;
+
     log_msg("SYSTEM: Start symulacji. N=%d, M=%d, K=%d", N, M, K);
+
 
     // start watku czyszczacego
     pthread_t cleaner_thread;
@@ -136,7 +133,6 @@ int main(int argc, char *argv[]) {
     // uruchomienie kapitana
     pid_t pid_cap = fork();
     if (pid_cap == 0) {
-        signal(SIGINT, SIG_DFL);
         execl("./build/captain", "captain", NULL);
         perror("execl captain");
         exit(1);
@@ -145,16 +141,15 @@ int main(int argc, char *argv[]) {
     // uruchomienie dyspozytora
     pid_t pid_disp = fork();
     if (pid_disp == 0) {
-        signal(SIGINT, SIG_DFL);
         execl("./build/dispatcher", "dispatcher", NULL);
         perror("execl dispatcher");
         exit(1);
     }
 
 
-    int passengers_created = 0;
+    int generated = 0;
 
-    while (keep_running) {
+    while (keep_running && generated < target_passengers) {
         sem_lock(SEM_MUTEX);
         if (state->ship_state == FINISHED) {
             sem_unlock(SEM_MUTEX);
@@ -163,36 +158,65 @@ int main(int argc, char *argv[]) {
         }
         sem_unlock(SEM_MUTEX);
 
-        int current_active;
+        int current;
         pthread_mutex_lock(&count_mutex);
-        current_active = active_passengers;
+        current = active_passengers;
         pthread_mutex_unlock(&count_mutex);
 
-        if (passengers_created < N * R * 10 && current_active < MAX_ACTIVE_PASSENGERS) {
+        if (current < 800) {
             pid_t pid = fork();
              if (pid == 0) {
-                 signal(SIGINT, SIG_DFL);
-                 signal(SIGTERM, SIG_DFL);
                  execl("./build/passenger", "passenger", NULL);
                  exit(1);
              } else if (pid > 0) {
-                 passengers_created++;
+                 generated++;
                  pthread_mutex_lock(&count_mutex);
                  active_passengers++;
                  pthread_mutex_unlock(&count_mutex);
              }
         } else {
-           custom_sleep(1);
+  //          usleep(10000);
         }
-        usleep(100000);
+    //    usleep(2000);
     }
 
-    printf("\nSYSTEM: Czekam na zakonczenie watku sprzatajacego...\n");
-    pthread_join(cleaner_thread, NULL);
-    pthread_mutex_destroy(&count_mutex);
+    printf("SYSTEM: Wygenerowano %d pasazerow. Czekam na ukonczenie kursow...\n", generated);
 
+    if (pid_disp > 0) {
+        kill(pid_disp, SIGKILL);
+    }
+
+    int timeout_counter = 0;
+    while (active_passengers > 0) {
+        if (!keep_running) {
+            timeout_counter++;
+
+            if (timeout_counter > 5) {
+                printf("SYSTEM: Pasazerowie utkneli. Zarzadzam przymusowy koniec.\n");
+                break;
+            }
+        }
+
+      //  sleep(1);
+
+    }
+
+    printf("\n==PODSUMOWANIE==\n");
+    fflush(stdout);
+    printf("Planowano: %d\n", target_passengers);
+    fflush(stdout);
+    printf("Obsluzono:  %d\n", finished_passengers);
+    fflush(stdout);
+
+    if (finished_passengers >= target_passengers - 5) {
+        printf("WYNIK: Wszyscy pasazerowie obsluzeni.\n");
+    } else {
+        printf("WYNIK: Brakuje %d pasazerow.\n", target_passengers - finished_passengers);
+    }
+    fflush(stdout);
+
+    keep_running = 0;
     perform_cleanup();
-    printf("SYSTEM: Koniec.\n");
 
     return 0;
 }
