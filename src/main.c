@@ -24,7 +24,18 @@ void perform_cleanup(void);
 // handler sprzatajacy
 void cleanup_handler(int sig) {
      (void)sig;
+     if (keep_running == 0) {
+         const char *msg = "\nSYSTEM: DRUGIE Ctrl+C -> WYMUSZAM SMIERC (SIGKILL)!\n";
+         write(STDOUT_FILENO, msg, 50);
+
+         kill(0, SIGKILL);
+         _exit(1);
+     }
+
      keep_running = 0;
+     const char *msg = "\nSYSTEM: Otrzymano Ctrl+C. Koncze... (Nacisnij ponownie by zabic natychmiast)\n";
+     write(STDOUT_FILENO, msg, 78);
+
 }
 
 // watek czyszczacy
@@ -174,6 +185,17 @@ int main(int argc, char *argv[]) {
                  active_passengers++;
                  pthread_mutex_unlock(&count_mutex);
              }
+
+             if (generated % 100 == 0) {
+                 pthread_mutex_lock(&count_mutex);
+                 int finished = finished_passengers;
+                 int active = active_passengers;
+                 pthread_mutex_unlock(&count_mutex);
+
+                 printf("[LIVE] Gen: %d | Akt: %d | Fin: %d\n", generated, active, finished);
+                 fflush(stdout);
+            }
+
         } else {
   //          usleep(10000);
         }
@@ -198,6 +220,16 @@ int main(int argc, char *argv[]) {
         }
 
       //  sleep(1);
+
+    pthread_mutex_lock(&count_mutex);
+    int rem = active_passengers;
+    int fin = finished_passengers;
+    pthread_mutex_unlock(&count_mutex);
+
+    if (rem > 0) {
+        printf("[LIVE] Czekam... Aktywni: %d | Juz obsłużeni: %d\n", rem, fin);
+        fflush(stdout);
+    }
 
     }
 
